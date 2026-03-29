@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from backend.app.config import settings
+from backend.app.routers.affiliate import router as affiliate_router
 from backend.app.routers.clubs import router as clubs_router
 from backend.app.routers.fitting import router as fitting_router
 from backend.app.routers.ingest import router as ingest_router
@@ -11,6 +12,7 @@ app.include_router(clubs_router)
 app.include_router(sessions_router)
 app.include_router(ingest_router)
 app.include_router(fitting_router)
+app.include_router(affiliate_router)
 
 
 @app.get("/")

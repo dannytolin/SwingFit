@@ -9,7 +9,7 @@ from sqlalchemy import engine_from_config, pool
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.app.database import Base
-from backend.app.models import User, ClubSpec, SwingSession, Shot  # noqa: F401
+from backend.app.models import User, ClubSpec, SwingSession, Shot, AffiliateClick, PriceCache  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
