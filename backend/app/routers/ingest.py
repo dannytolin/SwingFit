@@ -10,6 +10,10 @@ from backend.app.models.user import User
 from backend.app.schemas.shot import ShotCreate
 from backend.app.services.data_quality import get_data_quality
 from backend.app.services.parsers.trackman.csv_export import is_trackman_csv, parse_trackman_csv
+from backend.app.services.parsers.trackman.report_vision import (
+    TrackmanReportParser,
+    normalize_vision_response,
+)
 from backend.app.services.parsers.garmin_r10 import is_garmin_r10_csv, parse_garmin_r10_csv
 from backend.app.services.parsers.generic_csv import parse_generic_csv
 from backend.app.utils.club_normalizer import normalize_club_name
@@ -123,4 +127,48 @@ async def manual_entry(
         },
         "shot_count": 1,
         "data_quality": dq,
+    }
+
+
+@router.post("/trackman-report", status_code=201)
+async def upload_trackman_report(
+    user_id: int,
+    file: UploadFile,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    content = await file.read()
+    media_type = file.content_type or "image/png"
+    parser = TrackmanReportParser()
+    vision_result = parser.extract_from_image(content, media_type)
+    shots = normalize_vision_response(vision_result)
+    confidence = vision_result.get("confidence", 0.0)
+    swing_session = SwingSession(
+        user_id=user_id,
+        launch_monitor_type="trackman_4",
+        data_source="ocr_vision",
+        source_file_name=file.filename,
+    )
+    db.add(swing_session)
+    db.commit()
+    db.refresh(swing_session)
+    for shot_data in shots:
+        shot = Shot(session_id=swing_session.id, **shot_data.model_dump())
+        db.add(shot)
+    db.commit()
+    dq = get_data_quality("trackman_4", "ocr_vision")
+    return {
+        "session": {
+            "id": swing_session.id,
+            "launch_monitor_type": "trackman_4",
+            "data_source": "ocr_vision",
+            "source_file_name": file.filename,
+        },
+        "shot_count": len(shots),
+        "confidence": confidence,
+        "low_confidence_warning": confidence < 0.7,
+        "data_quality": dq,
+        "extracted_data": vision_result,
     }
