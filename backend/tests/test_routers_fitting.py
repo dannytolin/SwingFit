@@ -157,3 +157,15 @@ def test_recommend_no_profile():
         "club_type": "putter",
     })
     assert response.status_code == 404
+
+
+def test_recommend_clubs_include_buy_links():
+    response = client.post("/fitting/recommend", json={
+        "user_id": USER_ID,
+        "club_type": "driver",
+    })
+    assert response.status_code == 200
+    recs = response.json()["recommendations"]
+    for r in recs:
+        assert "buy_links" in r
+        assert isinstance(r["buy_links"], list)

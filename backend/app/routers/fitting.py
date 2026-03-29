@@ -10,6 +10,7 @@ from backend.app.models.user import User
 from backend.app.services.swing_profile import compute_swing_profile
 from backend.app.services.fitting_engine import score_club, rank_recommendations
 from backend.app.services.explanation import generate_explanation
+from backend.app.services.affiliate import get_buy_links
 
 router = APIRouter(tags=["fitting"])
 
@@ -74,6 +75,7 @@ def recommend_clubs(req: RecommendRequest, db: Session = Depends(get_db)):
     ranked = rank_recommendations(profile, club_dicts, top_n=req.top_n)
     for rec in ranked:
         rec["explanation"] = generate_explanation(profile, rec["club"])
+        rec["buy_links"] = get_buy_links(rec["club"], include_used=req.include_used)
 
     return {
         "profile": asdict(profile),
