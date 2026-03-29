@@ -79,3 +79,66 @@ def recommend_clubs(req: RecommendRequest, db: Session = Depends(get_db)):
         "profile": asdict(profile),
         "recommendations": ranked,
     }
+
+
+class CompareRequest(BaseModel):
+    user_id: int
+    club_type: str
+    current_club_id: int
+    recommended_club_id: int
+
+
+def _club_to_dict(club: ClubSpec) -> dict:
+    return {
+        "id": club.id,
+        "brand": club.brand,
+        "model_name": club.model_name,
+        "model_year": club.model_year,
+        "club_type": club.club_type,
+        "loft": club.loft,
+        "launch_bias": club.launch_bias,
+        "spin_bias": club.spin_bias,
+        "forgiveness_rating": club.forgiveness_rating,
+        "workability_rating": club.workability_rating,
+        "swing_speed_min": club.swing_speed_min,
+        "swing_speed_max": club.swing_speed_max,
+        "msrp": club.msrp,
+        "avg_used_price": club.avg_used_price,
+        "still_in_production": club.still_in_production,
+    }
+
+
+@router.post("/fitting/compare")
+def compare_clubs(req: CompareRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == req.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    profile = compute_swing_profile(db, req.user_id, req.club_type)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"No valid shots found for {req.club_type}")
+
+    current_club = db.query(ClubSpec).filter(ClubSpec.id == req.current_club_id).first()
+    if not current_club:
+        raise HTTPException(status_code=404, detail="Current club not found")
+
+    rec_club = db.query(ClubSpec).filter(ClubSpec.id == req.recommended_club_id).first()
+    if not rec_club:
+        raise HTTPException(status_code=404, detail="Recommended club not found")
+
+    current_dict = _club_to_dict(current_club)
+    rec_dict = _club_to_dict(rec_club)
+
+    current_score = score_club(profile, current_dict)
+    rec_score = score_club(profile, rec_dict)
+    explanation = generate_explanation(profile, rec_dict)
+
+    return {
+        "profile": asdict(profile),
+        "current": current_dict,
+        "recommended": rec_dict,
+        "current_score": current_score,
+        "recommended_score": rec_score,
+        "score_difference": round(rec_score - current_score, 1),
+        "explanation": explanation,
+    }
