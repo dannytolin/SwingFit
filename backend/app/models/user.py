@@ -18,6 +18,4 @@ class User(Base):
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
 
-    # sessions relationship to SwingSession will be added in Task 5
-    # once SwingSession is defined, to avoid forward-reference resolution errors.
-    # sessions = relationship("SwingSession", back_populates="user")
+    sessions = relationship("SwingSession", back_populates="user")
