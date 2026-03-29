@@ -1,0 +1,21 @@
+brand,model_name,model_year,club_type,loft,lie_angle,shaft_options,head_weight,adjustable,loft_range_min,loft_range_max,launch_bias,spin_bias,forgiveness_rating,workability_rating,swing_speed_min,swing_speed_max,msrp,avg_used_price,still_in_production
+TaylorMade,Qi10 Max,2025,driver,10.5,56.0,"[""Fujikura Speeder NX"",""Project X HZRDUS""]",200,True,8.0,12.5,high,low,9,3,80,115,599.99,450.00,True
+TaylorMade,Qi10,2025,driver,10.5,56.0,"[""Fujikura Speeder NX""]",198,True,8.0,12.5,mid,low,7,6,85,120,599.99,440.00,True
+Callaway,Paradym Ai Smoke Max,2024,driver,10.5,56.0,"[""Project X HZRDUS Smoke""]",200,True,8.0,12.5,high,mid,9,3,75,115,599.99,380.00,True
+Callaway,Paradym Ai Smoke,2024,driver,9.0,56.0,"[""Project X HZRDUS Smoke""]",198,True,7.0,11.0,mid,low,6,7,90,125,599.99,370.00,True
+Titleist,TSR3,2023,driver,9.0,58.5,"[""KURO KAGE Black"",""Tensei AV Blue""]",200,True,8.0,11.0,low,low,5,9,90,125,599.99,320.00,False
+Titleist,TSR2,2023,driver,10.0,58.5,"[""KURO KAGE Black""]",200,True,8.0,12.0,mid,mid,8,5,80,118,599.99,310.00,False
+Ping,G430 Max,2023,driver,10.5,57.0,"[""Alta CB Black"",""Ping Tour 2.0""]",203,True,8.0,12.5,mid,mid,9,4,75,115,549.99,300.00,True
+Ping,G430 LST,2023,driver,9.0,57.0,"[""Ping Tour 2.0""]",198,True,7.5,10.5,low,low,5,8,95,130,549.99,310.00,True
+Cobra,Darkspeed Max,2024,driver,10.5,56.5,"[""Arccos Caddie Smart Grip""]",200,True,9.0,12.0,high,mid,9,3,75,110,499.99,340.00,True
+Cobra,Darkspeed X,2024,driver,9.0,56.5,"[""MCA Kai'li White""]",196,True,7.5,10.5,low,low,5,8,95,130,499.99,330.00,True
+TaylorMade,P790,2024,iron,33.0,62.5,"[""True Temper Dynamic Gold""]",265,False,,,mid,mid,6,7,80,115,1399.99,900.00,True
+Callaway,Apex Pro 24,2024,iron,30.5,62.0,"[""True Temper Elevate""]",263,False,,,mid,mid,5,8,85,120,1499.99,950.00,True
+Titleist,T150,2023,iron,33.0,62.5,"[""True Temper AMT Black""]",265,False,,,mid,mid,5,8,80,115,1399.99,850.00,True
+Ping,i230,2023,iron,33.0,62.5,"[""Nippon Modus3 Tour""]",265,False,,,mid,mid,6,7,80,115,1349.99,820.00,True
+Cobra,King Forged Tec,2024,iron,30.0,62.0,"[""KBS $-Taper""]",260,False,,,high,mid,7,5,75,110,1199.99,750.00,True
+Titleist,Vokey SM10,2024,wedge,56.0,64.0,"[""True Temper Dynamic Gold""]",300,False,,,mid,high,4,10,70,130,179.99,130.00,True
+Callaway,Jaws Raw,2023,wedge,56.0,64.0,"[""True Temper Dynamic Gold""]",300,False,,,mid,high,5,9,70,130,179.99,120.00,True
+TaylorMade,Hi-Toe 3,2024,wedge,58.0,64.0,"[""KBS Hi-Rev 2.0""]",298,False,,,high,high,6,8,70,125,179.99,125.00,True
+Cleveland,RTX6 ZipCore,2024,wedge,56.0,64.0,"[""True Temper Dynamic Gold""]",300,False,,,mid,high,5,9,70,130,159.99,110.00,True
+Ping,Glide 4.0,2023,wedge,56.0,64.0,"[""Nippon Modus3 Tour""]",298,False,,,mid,mid,6,8,70,125,179.99,115.00,True
