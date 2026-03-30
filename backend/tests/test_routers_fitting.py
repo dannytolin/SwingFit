@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
@@ -10,6 +12,17 @@ from backend.app.routers.auth import get_current_user
 from backend.app.models.session import SwingSession
 from backend.app.models.shot import Shot
 from backend.app.models.club_spec import ClubSpec
+
+# Mock Claude responses — all recommend tests patch this
+MOCK_CLAUDE_RECS = [
+    {"club_spec_id": 1, "match_score": 94, "explanation": "Great low-spin fit.",
+     "projected_changes": {"spin_delta": "-400 rpm"}, "best_for": "Low spin"},
+    {"club_spec_id": 2, "match_score": 88, "explanation": "Good forgiveness option.",
+     "projected_changes": {"carry_delta": "+5 yd"}, "best_for": "Forgiveness"},
+    {"club_spec_id": 3, "match_score": 82, "explanation": "Solid mid-range choice.",
+     "projected_changes": {}, "best_for": "All-around"},
+]
+MOCK_USAGE = {"input_tokens": 500, "output_tokens": 300, "estimated_cost": 0.006}
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -123,7 +136,9 @@ def test_get_swing_profile_no_shots():
     assert response.status_code == 404
 
 
-def test_recommend_clubs():
+@patch("backend.app.routers.fitting.call_claude_for_recommendations")
+def test_recommend_clubs(mock_call):
+    mock_call.return_value = (MOCK_CLAUDE_RECS, MOCK_USAGE)
     response = client.post("/fitting/recommend", json={
         "club_type": "driver",
     })
@@ -140,9 +155,13 @@ def test_recommend_clubs():
     assert all("explanation" in r for r in recs)
     scores = [r["score"] for r in recs]
     assert scores == sorted(scores, reverse=True)
+    mock_call.assert_called_once()
 
 
-def test_recommend_with_budget():
+@patch("backend.app.routers.fitting.call_claude_for_recommendations")
+def test_recommend_with_budget(mock_call):
+    # Only club 3 (Ping G430, used $300) fits under $400 used
+    mock_call.return_value = ([MOCK_CLAUDE_RECS[2]], MOCK_USAGE)
     response = client.post("/fitting/recommend", json={
         "club_type": "driver",
         "budget_max": 400.0,
@@ -163,7 +182,9 @@ def test_recommend_no_profile():
     assert response.status_code == 404
 
 
-def test_recommend_clubs_include_buy_links():
+@patch("backend.app.routers.fitting.call_claude_for_recommendations")
+def test_recommend_clubs_include_buy_links(mock_call):
+    mock_call.return_value = (MOCK_CLAUDE_RECS, MOCK_USAGE)
     response = client.post("/fitting/recommend", json={
         "club_type": "driver",
     })

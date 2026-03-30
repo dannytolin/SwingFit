@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
@@ -10,6 +12,15 @@ from backend.app.routers.auth import get_current_user
 from backend.app.models.session import SwingSession
 from backend.app.models.shot import Shot
 from backend.app.models.club_spec import ClubSpec
+
+MOCK_COMPARISON = {
+    "current_analysis": "The SIM2 Max gives decent forgiveness.",
+    "recommended_analysis": "The TSR3 would reduce spin significantly.",
+    "key_differences": ["Lower spin", "More workability", "Less forgiveness"],
+    "projected_improvement": "Expect 8-12 yards more carry.",
+    "verdict": "Switch to the TSR3 for better distance.",
+}
+MOCK_USAGE = {"input_tokens": 800, "output_tokens": 400, "estimated_cost": 0.008}
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -105,7 +116,9 @@ def teardown_module():
 client = TestClient(app)
 
 
-def test_compare_clubs():
+@patch("backend.app.routers.fitting.call_claude_for_comparison")
+def test_compare_clubs(mock_call):
+    mock_call.return_value = (MOCK_COMPARISON, MOCK_USAGE)
     response = client.post("/fitting/compare", json={
         "club_type": "driver",
         "current_club_id": CURRENT_CLUB_ID,
@@ -116,12 +129,11 @@ def test_compare_clubs():
     assert "current" in data
     assert "recommended" in data
     assert "profile" in data
-    assert "explanation" in data
+    assert "comparison" in data
     assert data["current"]["brand"] == "TaylorMade"
     assert data["recommended"]["brand"] == "Titleist"
-    assert "current_score" in data
-    assert "recommended_score" in data
-    assert data["recommended_score"] >= 0
+    assert "verdict" in data["comparison"]
+    mock_call.assert_called_once()
 
 
 def test_compare_club_not_found():
