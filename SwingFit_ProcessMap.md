@@ -877,115 +877,117 @@ class SwingProfile:
 5. Set `data_quality` based on `sample_size`
 6. Create endpoint `GET /users/{id}/swing-profile?club_type=driver`
 
-### 2.2 — Recommendation Algorithm
+### 2.2 — Playwright Scrapers (Automated Club Database Population)
 
-The fitting engine matches a `SwingProfile` against the `ClubSpec` database. The algorithm works in stages:
+Instead of manually entering club specs and prices, Playwright scrapers run on a schedule to keep the database current.
 
-**Stage 1: Hard Filters** — Eliminate clubs that are clearly wrong
-- Filter out clubs outside the user's swing speed range (`swing_speed_min` / `swing_speed_max`)
-- Filter out clubs that don't match the club type
-- Filter out clubs outside the user's budget (if set)
-
-**Stage 2: Scoring** — Score remaining clubs on how well they complement the user's swing
-
-```python
-def score_club(profile: SwingProfile, club: ClubSpec) -> float:
-    """
-    Score a club's fit for a given swing profile.
-    Higher = better fit. Scale 0-100.
-    """
-    score = 0.0
-    
-    # --- Launch optimization (40% weight) ---
-    # Optimal driver launch: ~15° launch, ~2200 rpm spin for max distance
-    # If user launches too HIGH → recommend LOW launch/spin club (and vice versa)
-    
-    if profile.avg_launch_angle > OPTIMAL_LAUNCH[profile.club_type]:
-        # User launches high — reward low-launch clubs
-        if club.launch_bias == "low":
-            score += 20
-        elif club.launch_bias == "mid":
-            score += 10
-    elif profile.avg_launch_angle < OPTIMAL_LAUNCH[profile.club_type]:
-        # User launches low — reward high-launch clubs
-        if club.launch_bias == "high":
-            score += 20
-        elif club.launch_bias == "mid":
-            score += 10
-    else:
-        # User is in the sweet spot — reward mid
-        if club.launch_bias == "mid":
-            score += 20
-    
-    # Same logic for spin
-    # (spin optimization adds another 20 points)
-    
-    # --- Forgiveness vs Workability (30% weight) ---
-    # High handicap / high dispersion → prioritize forgiveness
-    # Low handicap / tight dispersion → prioritize workability
-    
-    dispersion_score = profile.std_offline or profile.std_carry
-    if dispersion_score > HIGH_DISPERSION_THRESHOLD:
-        score += club.forgiveness_rating * 3  # max 30
-    else:
-        score += club.workability_rating * 3  # max 30
-    
-    # --- Swing speed fit (20% weight) ---
-    # How centered is the user in the club's ideal speed range?
-    speed_center = (club.swing_speed_min + club.swing_speed_max) / 2
-    speed_range = club.swing_speed_max - club.swing_speed_min
-    speed_fit = 1 - abs(profile.avg_club_speed - speed_center) / (speed_range / 2)
-    score += max(0, speed_fit * 20)
-    
-    # --- Recency bonus (10% weight) ---
-    # Newer models get a small bonus (better tech, easier to find)
-    years_old = CURRENT_YEAR - club.model_year
-    recency_score = max(0, 10 - years_old * 2)  # 10 for current year, 0 for 5+ years old
-    score += recency_score
-    
-    return score
+**Architecture:**
+```
+scripts/scrapers/
+├── base.py                  # Shared Playwright setup, logging, rate limiting
+├── titleist_specs.py        # Titleist driver specs from titleist.com
+├── taylormade_specs.py      # TaylorMade driver specs from taylormadegolf.com
+├── callaway_specs.py        # Callaway driver specs from callawaygolf.com
+├── globalgolf_prices.py     # New/used pricing from GlobalGolf.com
+├── mygolfspy_reviews.py     # Review summaries from MyGolfSpy.com
+└── run_all.py               # Orchestrator — runs all scrapers, upserts results
 ```
 
-**Stage 3: Ranking & Explanation**
-- Sort by score descending
-- Return top 5 recommendations
-- For each, generate a plain-English explanation of WHY this club fits:
-  - "Your avg launch angle is 14.2° with 3100 rpm spin — that's higher spin than optimal. The Titleist TSR3 is a low-spin head that should bring your spin down ~300-400 rpm and add 8-12 yards of carry."
+**What each scraper does:**
 
-**Claude Code instructions:**
-1. Create `services/fitting_engine.py` with the `score_club` function
-2. Define optimal launch/spin constants per club type (these are well-documented in fitting literature):
-   - Driver: optimal launch ~12-15°, optimal spin ~2000-2500 rpm (varies by speed)
-   - 7-iron: optimal launch ~16-20°, optimal spin ~6000-7000 rpm
-3. Create `POST /fitting/recommend` endpoint:
-   - Input: `user_id`, `club_type`, optional `budget_max`, optional `include_used`
-   - Process: compute swing profile → hard filter → score → rank
-   - Output: top 5 clubs with scores, explanations, and buy links
-4. Create the explanation generator — use f-strings with the swing data and club specs to build readable explanations
-5. Write unit tests with sample swing profiles and verify the scoring produces sensible rankings
+1. **OEM Spec Scrapers** (Titleist, TaylorMade, Callaway) — Navigate to each brand's driver category page using headless Chromium. Extract: model name, year, loft options, MSRP, shaft options, adjustability. These are JS-rendered pages requiring a real browser.
 
-### 2.3 — Comparison Mode
+2. **GlobalGolf Price Scraper** — For each club in the `club_specs` table, search GlobalGolf and extract the lowest new price, lowest used price, and product URL. Upserts into the `price_cache` table. Product URLs become affiliate link bases.
 
-Let users compare their current club's performance against what the recommended club would theoretically deliver:
+3. **MyGolfSpy Review Scraper** — Scrape review pages for each club. Extract the first 500–1000 words of review text and any performance data tables. Store as `review_summary` on the `club_specs` record. This gives the Claude API recommendation engine editorial context.
 
+**Technical requirements:**
+- Playwright with headless Chromium (`pip install playwright && playwright install chromium`)
+- 2–3 second delays between page loads to avoid rate limiting
+- User-Agent rotation for retailer scrapers
+- Scraper runs logged to a `scrape_logs` table (scraper_name, ran_at, status, clubs_found, errors)
+- Drivers only to start — irons, wedges, and fairway woods added later
+- `price_cache` table extended with `is_available` (boolean) and `product_url` fields
+- Add `review_summary` text column to `club_specs`
+
+**Data flow:**
 ```
-YOUR CURRENT DRIVER: TaylorMade SIM2 Max (10.5°)
-  Avg Carry: 248 yd | Launch: 14.2° | Spin: 3100 rpm
-
-RECOMMENDED: Titleist TSR3 (9.0°)
-  Projected Carry: 258 yd | Launch: 12.8° | Spin: 2650 rpm
-  Estimated gain: +10 yards carry
-
-WHY: Your spin rate is ~600 rpm above optimal for your 
-club speed (105 mph). The TSR3's lower-spin profile 
-should reduce spin without sacrificing launch.
+Scrapers → parse HTML → normalize data → upsert into club_specs / price_cache
+                                        → log to scrape_logs
 ```
 
 **Claude Code instructions:**
-1. Create `POST /fitting/compare` endpoint
-2. Input: `user_id`, `club_type`, `current_club_id` (or specs), `recommended_club_id`
-3. Use the swing profile + club spec deltas to estimate projected performance changes
-4. Keep projections conservative — use ranges not exact numbers ("8-12 yards" not "10 yards")
+1. Add `playwright` to `requirements.txt`
+2. Create `scripts/scrapers/base.py` with shared browser setup, delay helper, User-Agent rotation, and logging
+3. Create each OEM scraper: navigate product pages, extract spec data, return list of dicts
+4. Create `globalgolf_prices.py`: search for each club in DB, extract pricing, upsert to `price_cache`
+5. Create `mygolfspy_reviews.py`: search for reviews, extract text, update `club_specs.review_summary`
+6. Create `run_all.py` orchestrator: runs scrapers in sequence, logs results, handles per-scraper errors
+7. Add Alembic migration for new columns (`review_summary` on `club_specs`, `is_available`/`product_url` on `price_cache`)
+8. Create `scrape_logs` model and migration
+9. Write integration tests that mock Playwright pages and verify parsing logic
+
+### 2.3 — Claude API Recommendation Engine
+
+Replace the static scoring algorithm with Claude API calls that provide intelligent, contextual recommendations. The swing profile computation stays (it's math), but scoring/ranking/explanations are handled by Claude.
+
+**New data flow:**
+```
+User requests recommendations
+  → compute_swing_profile() [unchanged — math stays]
+  → hard-filter clubs by type, speed range, budget [unchanged]
+  → send profile + candidate clubs to Claude API (claude-sonnet-4-20250514)
+  → Claude returns top 5 with match_score, explanation, projected_changes, best_for
+  → cache in recommendations table
+  → return to frontend
+```
+
+**What Claude receives in the prompt:**
+- User's swing profile (all metrics, tendencies, dispersion)
+- List of candidate clubs (specs, pricing, review summaries from scrapers)
+- Instruction to act as an expert club fitter with 20 years of experience
+- Instruction to reference the golfer's specific numbers in explanations
+- Instruction to write in a conversational, editorial tone
+- Optimal launch/spin windows per club type (the fitting constants)
+
+**What Claude returns:**
+```json
+[
+  {
+    "club_spec_id": 12,
+    "match_score": 94,
+    "explanation": "Your 3,100 rpm spin rate is 600 rpm above optimal for your 105 mph club speed. The TSR3's compact shape and forward CG deliver a penetrating flight that should close that gap and add 8-12 yards of carry.",
+    "projected_changes": { "spin_delta": "-400 to -600 rpm", "carry_delta": "+8 to +12 yd" },
+    "best_for": "Low spin seekers with above-average speed"
+  }
+]
+```
+
+**Caching strategy:**
+- Recommendations cached in a `recommendations` table per user/club_type
+- Re-generate only when: new session data uploaded, budget/preferences change, or club database refreshed by scrapers
+- Shop page reads cache first (fast, no API call) — only calls Claude when stale
+
+**Cost tracking:**
+- Log each Claude API call to `api_usage` table: user_id, endpoint, model, input_tokens, output_tokens, estimated_cost, created_at
+
+**Endpoints:**
+- `POST /fitting/recommend` — compute profile, hard-filter, call Claude, cache, return results
+- `GET /fitting/recommendations` — read cached recommendations (no API call, fast)
+- `POST /fitting/compare` — send two clubs + profile to Claude for side-by-side analysis
+
+**Claude Code instructions:**
+1. Add `anthropic` SDK (already in requirements.txt)
+2. Add `ANTHROPIC_API_KEY` to `.env` and `config.py`
+3. Create `services/claude_fitter.py` with the fitting prompt template and API call logic
+4. Create `models/recommendation.py` — cached recommendation model
+5. Create `models/api_usage.py` — API usage tracking model
+6. Replace the scoring/explanation logic in `routers/fitting.py` to use Claude API
+7. Add `GET /fitting/recommendations` endpoint for cached reads
+8. Keep `compute_swing_profile()` and the hard-filter logic unchanged
+9. Wire frontend Shop page: load from cache first, show "Generate" button if no cache
+10. Handle Claude API errors: return cached recommendations if available, else user-friendly error
+11. Write tests with mocked Anthropic client
 
 ---
 
