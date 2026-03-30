@@ -1,1 +1,63 @@
-@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 50 20% 97%;
+    --foreground: 150 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 150 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 20% 12%;
+
+    --primary: 153 38% 16%;
+    --primary-foreground: 50 20% 97%;
+
+    --secondary: 40 10% 94%;
+    --secondary-foreground: 150 20% 20%;
+
+    --muted: 40 10% 92%;
+    --muted-foreground: 150 8% 45%;
+
+    --accent: 39 50% 59%;
+    --accent-foreground: 150 20% 12%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 40 10% 88%;
+    --input: 40 10% 88%;
+    --ring: 153 38% 16%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 150 20% 12%;
+    --sidebar-primary: 153 38% 16%;
+    --sidebar-primary-foreground: 50 20% 97%;
+    --sidebar-accent: 40 10% 94%;
+    --sidebar-accent-foreground: 150 20% 12%;
+    --sidebar-border: 40 10% 88%;
+    --sidebar-ring: 153 38% 16%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'DM Serif Display', serif;
+  }
+}
