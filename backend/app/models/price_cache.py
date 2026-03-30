@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import DateTime, Float, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from backend.app.database import Base
 
@@ -17,3 +17,5 @@ class PriceCache(Base):
     last_checked: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
+    is_available: Mapped[bool] = mapped_column(Boolean, default=True)
+    product_url: Mapped[str | None] = mapped_column(String, nullable=True)

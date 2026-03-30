@@ -4,5 +4,6 @@ from backend.app.models.session import SwingSession
 from backend.app.models.shot import Shot
 from backend.app.models.click import AffiliateClick
 from backend.app.models.price_cache import PriceCache
+from backend.app.models.scrape_log import ScrapeLog
 
-__all__ = ["ClubSpec", "User", "SwingSession", "Shot", "AffiliateClick", "PriceCache"]
+__all__ = ["ClubSpec", "User", "SwingSession", "Shot", "AffiliateClick", "PriceCache", "ScrapeLog"]

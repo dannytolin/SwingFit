@@ -41,6 +41,9 @@ class ClubSpec(Base):
     avg_used_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     affiliate_url_template: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # Content
+    review_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Metadata
     still_in_production: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
