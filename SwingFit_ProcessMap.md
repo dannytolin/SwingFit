@@ -150,13 +150,13 @@ class ClubSpec(Base):
     __tablename__ = "club_specs"
 
     id = Column(Integer, primary_key=True)
-
+    
     # Identity
     brand = Column(String)              # "TaylorMade", "Callaway", "Titleist", etc.
     model_name = Column(String)         # "Stealth 2 Plus"
     model_year = Column(Integer)        # 2023
     club_type = Column(String)          # "driver", "iron", "hybrid", "fairway", "wedge", "putter"
-
+    
     # Specifications
     loft = Column(Float)                # degrees — e.g., 9.0, 10.5 for drivers
     lie_angle = Column(Float)           # degrees
@@ -165,22 +165,22 @@ class ClubSpec(Base):
     adjustable = Column(Boolean)        # hosel adjustability
     loft_range_min = Column(Float)      # if adjustable, min loft
     loft_range_max = Column(Float)      # if adjustable, max loft
-
+    
     # Performance profile (from OEM data / fitting databases)
     launch_bias = Column(String)        # "low", "mid", "high"
     spin_bias = Column(String)          # "low", "mid", "high"
     forgiveness_rating = Column(Integer) # 1-10 scale
     workability_rating = Column(Integer) # 1-10 scale
-
+    
     # Swing speed suitability ranges
     swing_speed_min = Column(Float)     # mph — lower bound of ideal range
     swing_speed_max = Column(Float)     # mph — upper bound of ideal range
-
+    
     # Market data
     msrp = Column(Float)
     avg_used_price = Column(Float)      # updated periodically
     affiliate_url_template = Column(String)  # parameterized URL
-
+    
     # Metadata
     still_in_production = Column(Boolean)
     created_at = Column(DateTime)
@@ -207,27 +207,27 @@ class ClubSpec(Base):
 
 class SwingSession(Base):
     __tablename__ = "swing_sessions"
-
+    
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-
+    
     # Session metadata
     session_date = Column(DateTime)
     launch_monitor_type = Column(String)   # "trackman_4", "trackman_range", "garmin_r10", "rapsodo_mlm2", "fullswing_kit", "manual"
     location = Column(String, nullable=True)  # "range", "course", "indoor", "trackman_range_facility"
-
+    
     # Trackman-specific metadata
     trackman_session_id = Column(String, nullable=True)    # ID from Trackman Range API or MyTrackman
     trackman_facility_name = Column(String, nullable=True) # e.g., "GOLFTEC Chicago", "Trackman Range - Scottsdale"
     trackman_bay_id = Column(String, nullable=True)        # Bay ID for Trackman Range sessions
-
+    
     # Data quality indicator
     data_source = Column(String)           # "api_realtime", "api_post_session", "file_upload", "manual_entry"
-
+    
     # File reference
     source_file_name = Column(String, nullable=True)
     source_file_hash = Column(String, nullable=True)  # dedupe uploads
-
+    
     created_at = Column(DateTime)
 
 
@@ -235,15 +235,15 @@ class SwingSession(Base):
 
 class Shot(Base):
     __tablename__ = "shots"
-
+    
     id = Column(Integer, primary_key=True)
     session_id = Column(Integer, ForeignKey("swing_sessions.id"))
-
+    
     # What club was used for this shot
     club_used = Column(String)             # "driver", "7-iron", "PW", etc.
     club_brand = Column(String, nullable=True)
     club_model = Column(String, nullable=True)
-
+    
     # Ball data
     ball_speed = Column(Float)             # mph
     launch_angle = Column(Float)           # degrees
@@ -251,7 +251,7 @@ class Shot(Base):
     spin_axis = Column(Float, nullable=True) # degrees — tilt
     carry_distance = Column(Float)         # yards
     total_distance = Column(Float, nullable=True)
-
+    
     # Club data (not all monitors provide all of these)
     club_speed = Column(Float, nullable=True)     # mph
     smash_factor = Column(Float, nullable=True)
@@ -259,21 +259,21 @@ class Shot(Base):
     club_path = Column(Float, nullable=True)       # degrees
     face_angle = Column(Float, nullable=True)      # degrees
     face_to_path = Column(Float, nullable=True)    # degrees
-
+    
     # Dispersion
     offline_distance = Column(Float, nullable=True)  # yards left(-) / right(+)
     apex_height = Column(Float, nullable=True)        # feet
-
+    
     # Trackman-specific extended data (not available from all monitors)
     landing_angle = Column(Float, nullable=True)       # degrees — from Trackman
     dynamic_loft = Column(Float, nullable=True)        # degrees — from Trackman
     spin_loft = Column(Float, nullable=True)           # degrees — from Trackman (launch_angle + attack_angle)
     hang_time = Column(Float, nullable=True)           # seconds — from Trackman Range API
     last_data_distance = Column(Float, nullable=True)  # yards — how far Trackman tracked the ball
-
+    
     # Quality flag
     is_valid = Column(Boolean, default=True)  # can be flagged as mishit
-
+    
     shot_number = Column(Integer)  # order within session
 ```
 
@@ -343,118 +343,484 @@ There are four distinct ways to get data out of Trackman, each with different ac
 
 #### 1.1a — Trackman Performance Studio (TPS) CSV Export
 
-From TPS, users can go to Analyze → Table View → Export. This produces a CSV with all measured parameters.
+From TPS, users can go to Analyze → Table View → Export. This produces a CSV with all measured parameters. The columns include Trackman's full data set:
+
+```
+Club,Club Speed (mph),Attack Angle (deg),Club Path (deg),Face Angle (deg),Face to Path (deg),Ball Speed (mph),Smash Factor,Launch Angle (deg),Launch Direction (deg),Spin Rate (rpm),Spin Axis (deg),Carry (yd),Carry Side (yd),Total (yd),Total Side (yd),Apex Height (ft),Landing Angle (deg)
+Driver,105.2,-1.2,2.1,0.8,-1.3,149.8,1.42,12.3,-0.5,2845,3.2,248,8,271,12,98,38.5
+Driver,107.1,-0.8,1.5,0.3,-1.2,151.0,1.41,11.8,-0.2,2650,2.1,255,4,278,6,95,37.2
+```
+
+**Trackman provides significantly richer data than consumer monitors:**
+- Full club delivery data (attack angle, club path, face angle, face to path, dynamic loft)
+- Spin axis (not just total spin — tells you draw/fade spin)
+- Landing angle (helps assess trajectory optimization)
+- Carry side distance (precise dispersion, not estimated)
 
 **Claude Code instructions:**
 1. Create `services/parsers/trackman/csv_export.py`
-2. Map all Trackman column headers to the `Shot` schema
-3. Handle unit variations: Trackman can export in metric or imperial. Detect from headers and convert to imperial internally.
-4. Handle "N/A" or blank cells
-5. Auto-detect club type from the "Club" column
+2. Map all Trackman column headers to the `Shot` schema. Key mappings:
+   - "Club Speed (mph)" → `club_speed`
+   - "Attack Angle (deg)" → `attack_angle`
+   - "Club Path (deg)" → `club_path`
+   - "Face Angle (deg)" → `face_angle`
+   - "Face to Path (deg)" → `face_to_path`
+   - "Spin Axis (deg)" → `spin_axis`
+   - "Carry Side (yd)" → `offline_distance`
+   - "Apex Height (ft)" → `apex_height`
+   - "Landing Angle (deg)" → store in new Shot field `landing_angle`
+3. Handle unit variations: Trackman can export in metric (mps, meters) or imperial (mph, yards). Detect from headers and convert to imperial internally.
+4. Handle "N/A" or blank cells — Trackman leaves fields empty when it can't measure (e.g., sometimes misses spin on a topped shot)
+5. Auto-detect club type from the "Club" column — Trackman uses: "Driver", "3 Wood", "5 Wood", "4 Hybrid", "5 Iron" through "PW", "GW", "SW", "LW"
 6. Set `launch_monitor_type = "trackman_4"` and `data_source = "file_upload"`
 
 #### 1.1b — Trackman Stroke File (.tsf) Parser
 
-Users can also export from TPS as a "TrackMan Stroke File" (.tsf) — this is Trackman's proprietary XML-based format.
+Users can also export from TPS as a "TrackMan Stroke File" (.tsf) — this is Trackman's proprietary format, typically saved to USB. The .tsf file is an XML-based format.
 
 **Claude Code instructions:**
 1. Create `services/parsers/trackman/stroke_file.py`
-2. Parse the XML structure
+2. Parse the XML structure — each stroke contains the same data fields as the CSV but in XML nodes
 3. Map to the `Shot` schema using the same field mapping as the CSV parser
+4. Extract session metadata from the file header (date, location, player name if present)
+5. Set `launch_monitor_type = "trackman_4"` and `data_source = "file_upload"`
 
-#### 1.1c — SwingSync CSV Import
+#### 1.1c — SwingSync CSV Import (Intermediary for Trackman Users)
 
-SwingSync (swingsync.com) positions itself as a "Strava for golf sims" and can import Trackman session data and export it as CSV.
+SwingSync (swingsync.com) positions itself as a "Strava for golf sims" and can import Trackman session data and export it as CSV. For users who already use SwingSync, this is the easiest path.
 
 **Claude Code instructions:**
 1. Create `services/parsers/trackman/swingsync.py`
 2. Parse SwingSync's CSV export format (different column headers than TPS)
+3. Map to the `Shot` schema
+4. Set `launch_monitor_type = "trackman_4"` (original source) and `data_source = "file_upload"`
 
 ### 1.2 — Trackman Report OCR (Priority 2 — Biggest User Base Unlock)
 
-**Why this is Priority 2:** Most golfers who use Trackman don't have access to TPS export. They take a GOLFTEC lesson and walk away with a PDF report or screenshot. This is the largest segment of Trackman users by far.
+**Why this is Priority 2, right after file parsers:** Most golfers who use Trackman don't have access to TPS export. They take a GOLFTEC lesson, the coach controls the computer, and the golfer walks away with either a PDF report emailed to them or their session data visible in the Trackman Golf app (which has no export). This is the largest segment of Trackman users by far — casual-to-serious golfers who pay for lessons and fittings but don't own a Trackman. If they can just screenshot their app or forward their PDF report, you've unlocked 10x the addressable market compared to file export alone.
 
-**Technical approach — use Claude's Vision API:**
+**What users actually have in hand after a Trackman session:**
+
+1. **Trackman Golf App screenshots** — The app shows session data in a clean card-style layout with stats per club. Users screenshot this all the time to share on social media or text to friends. Standard format, consistent layout.
+
+2. **Emailed PDF reports** — Coaches and fitting studios email summary reports. These are formatted PDFs with tables showing averages and sometimes per-shot data. Trackman has standard report templates.
+
+3. **Trackman Combine reports** — Popular standardized test that outputs a scorecard-style PDF with distances per club.
+
+4. **Photos of the TPS screen** — Some users just snap a photo of the monitor with their phone before walking away.
+
+**Common Trackman report/app data layout:**
+
+```
+┌─────────────────────────────────────────────────────┐
+│  DRIVER — Session Summary                            │
+│                                                     │
+│  Club Speed    105.2 mph    Attack Angle   -1.2°    │
+│  Ball Speed    149.8 mph    Club Path       2.1°    │
+│  Smash Factor    1.42       Face Angle      0.8°    │
+│  Launch Angle   12.3°       Face to Path   -1.3°    │
+│  Spin Rate     2845 rpm     Spin Axis       3.2°    │
+│  Carry          248 yd      Carry Side      8 yd    │
+│  Total          271 yd      Landing Angle  38.5°    │
+│  Apex Height     98 ft                              │
+└─────────────────────────────────────────────────────┘
+```
+
+**Technical approach — use Claude's Vision API, not traditional OCR:**
+
+Traditional OCR (pytesseract) works for clean PDFs but struggles with phone photos of screens (glare, angles, varying lighting). Claude's vision API is a much better fit here — it can interpret the layout, understand what the numbers mean in context, and handle messy real-world images.
 
 ```python
 # services/parsers/trackman/report_vision.py
 
+import anthropic
+
 class TrackmanReportParser:
-    """Uses Claude's vision API to extract swing data from Trackman reports."""
-
-    def extract_from_image(self, image_bytes: bytes, media_type: str) -> dict:
+    """
+    Uses Claude's vision API to extract swing data from Trackman 
+    reports, screenshots, and photos.
+    """
+    
+    EXTRACTION_PROMPT = """
+    Analyze this Trackman golf report/screenshot and extract all swing data.
+    
+    Return a JSON object with this exact structure:
+    {
+        "clubs": [
+            {
+                "club_type": "driver",
+                "shots": 24,
+                "averages": {
+                    "club_speed": 105.2,
+                    "ball_speed": 149.8,
+                    "launch_angle": 12.3,
+                    "spin_rate": 2845,
+                    "carry_distance": 248,
+                    "total_distance": 271,
+                    "attack_angle": -1.2,
+                    "club_path": 2.1,
+                    "face_angle": 0.8,
+                    "face_to_path": -1.3,
+                    "spin_axis": 3.2,
+                    "apex_height": 98,
+                    "landing_angle": 38.5,
+                    "offline_distance": 8,
+                    "smash_factor": 1.42
+                }
+            }
+        ],
+        "data_type": "session_summary" | "combine_report" | "per_shot_table",
+        "source": "trackman_app_screenshot" | "pdf_report" | "tps_photo",
+        "confidence": 0.95
+    }
+    
+    Rules:
+    - All speeds in mph, distances in yards, heights in feet, angles in degrees, spin in rpm
+    - If units are metric (m/s, meters), convert to imperial
+    - If a value is not visible or unreadable, set to null
+    - If you can see per-shot data (not just averages), include each shot separately
+    - Set confidence to how sure you are the extraction is accurate (0.0 to 1.0)
+    - Only return valid JSON, no other text
+    """
+    
+    def __init__(self):
+        self.client = anthropic.Anthropic()
+    
+    async def extract_from_image(self, image_bytes: bytes, media_type: str) -> dict:
         """Extract swing data from a Trackman screenshot or photo."""
-        pass
-
-    def extract_from_pdf(self, pdf_bytes: bytes) -> dict:
+        
+        response = self.client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": base64.b64encode(image_bytes).decode()
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": self.EXTRACTION_PROMPT
+                    }
+                ]
+            }]
+        )
+        
+        # Parse the JSON response
+        result = json.loads(response.content[0].text)
+        return result
+    
+    async def extract_from_pdf(self, pdf_bytes: bytes) -> dict:
         """Extract swing data from a Trackman PDF report."""
+        # Convert PDF pages to images, then run vision extraction on each page
         pass
 ```
 
 **Claude Code instructions:**
 1. Create `services/parsers/trackman/report_vision.py` with the Claude Vision API integration
-2. Create `POST /ingest/trackman-report` endpoint
-3. Show extracted data in an editable form BEFORE saving
-4. Store the original image/PDF as a reference
-5. If extraction confidence < 0.7, show a warning
+2. Create `POST /ingest/trackman-report` endpoint that accepts:
+   - Image uploads (PNG, JPG) — screenshots and photos
+   - PDF uploads — emailed reports
+3. Run the vision extraction, return the parsed data to the frontend
+4. **Critical UX step:** Show the extracted data to the user in an editable form BEFORE saving:
+   ```
+   We extracted this from your Trackman report:
+   
+   DRIVER (24 shots)
+   Club Speed: [105.2] mph     ← editable field
+   Ball Speed: [149.8] mph     ← editable field  
+   Launch:     [12.3]  °       ← editable field
+   Spin:       [2845]  rpm     ← editable field
+   Carry:      [248]   yd      ← editable field
+   ...
+   
+   [Looks right — Save]  [Let me fix something]
+   ```
+5. Once confirmed, create the `SwingSession` + `Shot` records with `data_source = "ocr_vision"` and `launch_monitor_type = "trackman_4"`
+6. Store the original image/PDF as a reference (S3 or local storage) so you can re-process later if the extraction pipeline improves
+7. If extraction confidence < 0.7, show a warning: "We're not fully confident in some of these numbers — please double-check"
 
-### 1.3 — Trackman Range API Integration (Priority 3 — Post-MVP)
+**Cost consideration:** Claude Vision API calls cost money. At ~$0.01-0.03 per image, this is negligible at MVP scale. At 10K+ reports/month, consider caching common report templates or building a specialized fine-tuned model.
 
-The Trackman Range API (docs.trackmanrange.com) enables real-time data capture at facilities.
+### 1.3 — Trackman Range API Integration (Priority 3 — Real-Time at Facilities, Post-MVP)
+
+The Trackman Range API (docs.trackmanrange.com) is the path to real-time data capture at Trackman Range facilities. This is the highest-value integration because it creates a seamless experience: user walks up to a Trackman Range bay, opens SwingFit on their phone, hits balls, and recommendations update live.
+
+**How the Trackman Range API works:**
+
+```
+┌──────────────┐    WebSocket     ┌──────────────┐    REST API    ┌──────────────┐
+│  Trackman    │ ──────────────── │  SwingFit    │ ──────────────│  Trackman    │
+│  Range Unit  │  (real-time     │  Backend     │  (session     │  Range       │
+│  (at bay)    │   shot data)    │              │   mgmt)       │  Cloud       │
+└──────────────┘                 └──────────────┘               └──────────────┘
+```
+
+**The API provides three message types per shot:**
+1. **Launch Data** — Sent at impact: ball speed, launch angle, launch direction
+2. **Live Measurement** — Sent during flight: trajectory position updates (x,y,z at time t)
+3. **Final Measurement** — Sent after ball stops: carry, total, max height, carry side, all final values
+
+**Data fields available from the Range API:**
+- BallSpeed (in m/s — must convert to mph)
+- LaunchAngle, LaunchDirection
+- Carry, CarryActual, CarrySide, CarrySideActual
+- MaxHeight
+- TargetDistance
+- Full trajectory as polynomial coefficients (expandable to position arrays)
+- BayId (which bay the shot came from)
+
+**Important limitation:** The Trackman Range API provides ball flight data but does NOT include club delivery data (club speed, attack angle, face angle, club path). This is because Range units are overhead-mounted and optimized for ball tracking, not club measurement. For fitting purposes, this means Range API data is good for ball flight optimization but not as rich as Trackman 4 data for club delivery analysis.
 
 **Claude Code instructions:**
-1. Create `services/trackman_range_client.py` — WebSocket + REST client
-2. Build unit conversion utility (Range API uses metric)
-3. **Partnership required** — build against documented API, test with simulated data
+1. Create `services/trackman_range_client.py` — a WebSocket + REST client:
+   ```python
+   class TrackmanRangeClient:
+       """
+       Manages connection to Trackman Range API.
+       
+       Flow:
+       1. Authenticate with facility credentials
+       2. Start a player session on a specific bay
+       3. Open WebSocket connection for real-time shot data
+       4. Receive Launch → Live → Final measurement messages
+       5. Normalize Final measurements into Shot records
+       6. Close session when user is done
+       """
+       
+       def __init__(self, facility_host: str, auth_token: str):
+           self.base_url = f"https://{facility_host}"
+           self.ws_url = f"wss://{facility_host}/ws"
+           self.auth_token = auth_token
+       
+       async def start_session(self, bay_id: str, user_id: int) -> str:
+           """Start a player session on a bay. Returns session_id."""
+           pass
+       
+       async def connect_websocket(self, session_id: str):
+           """Open WebSocket and start receiving shot data."""
+           pass
+       
+       async def on_final_measurement(self, measurement: dict) -> Shot:
+           """
+           Called when a Final Measurement arrives.
+           Convert Trackman Range units to our Shot schema:
+           - BallSpeed: m/s → mph (multiply by 2.237)
+           - Carry: meters → yards (multiply by 1.094)
+           - MaxHeight: meters → feet (multiply by 3.281)
+           - CarrySide: meters → yards (multiply by 1.094)
+           """
+           pass
+       
+       async def end_session(self, session_id: str):
+           """Close the player session."""
+           pass
+   ```
+2. Create `services/parsers/trackman/range_api.py` — the normalizer that converts Range API measurements into `Shot` objects
+3. Create `POST /trackman/start-session` endpoint — user provides facility code + bay number, backend establishes connection
+4. Create `WebSocket /trackman/live` endpoint — frontend connects here to show real-time shot data as the user hits
+5. Create `POST /trackman/end-session` endpoint — closes connection, triggers fitting engine on the collected session data
+6. **Unit conversion is critical:** Range API uses metric (m/s, meters). All internal storage is imperial (mph, yards, feet). Build a `trackman_unit_converter.py` utility.
 
-### 1.4 — Trackman 4 Direct Bridge (Priority 4 — Phase 5+)
+**Partnership requirement:** To access the Range API, you need to register as a Trackman Range integration partner. This requires outreach to Trackman. For MVP, build the client code against their documented API and test with simulated data. Apply for partnership credentials once you have a working product to demo.
 
-Trackman 4 TCP/IP socket API on local network. Requires a companion bridge app.
+### 1.4 — Trackman 4 Direct Bridge (Priority 4 — Power Users with Own Units, Phase 5+)
 
-### 1.5 — Garmin R10 Parser
+Trackman 4 hardware exposes a TCP/IP socket API on the local network. This provides the richest data (full club + ball) in real-time, but requires a companion bridge app running on the same network as the Trackman unit.
 
-Garmin R10 data exported from the Garmin Golf app as CSV.
+**How it works:**
+```
+┌──────────────┐  TCP/IP Socket  ┌──────────────┐    HTTPS     ┌──────────────┐
+│  Trackman 4  │ ──────────────  │  SwingFit    │ ──────────── │  SwingFit    │
+│  (local      │  (club + ball   │  Bridge App  │  (forwards   │  Cloud       │
+│   network)   │   data per shot)│  (Desktop)   │   shot data) │  Backend     │
+└──────────────┘                 └──────────────┘              └──────────────┘
+```
+
+The bridge app is a lightweight desktop application (Electron or Python + tkinter) that:
+1. Discovers the Trackman 4 on the local network
+2. Connects via TCP/IP socket
+3. Arms the Trackman to start tracking
+4. Receives shot data (club speed, attack angle, face angle, club path, face to path, dynamic loft, ball speed, launch angle, spin rate, spin axis, carry, etc.)
+5. Forwards each shot to the SwingFit cloud API via HTTPS
+
+**Claude Code instructions:**
+1. Create `services/parsers/trackman/tm4_bridge.py` — the TCP/IP client
+2. This will be packaged as a standalone desktop app later (Phase 5+)
+3. For MVP, build the bridge as a Python CLI script that:
+   - Accepts the Trackman's local IP as an argument
+   - Connects via socket
+   - Receives JSON shot data
+   - POSTs to `POST /ingest/trackman-bridge` on the SwingFit API
+4. Document the Trackman 4 socket protocol (based on community documentation):
+   - Connection: TCP socket to Trackman IP, port TBD (typically discovered via mDNS/Bonjour)
+   - Commands: ARM, DISARM, SET_CLUB, GET_STATUS
+   - Data: JSON payloads with full club + ball parameters per shot
+5. **This is a Phase 5+ build.** For MVP, point Trackman 4 owners to file export (Path 1). The bridge is the long-term premium experience.
+
+### 1.5 — Garmin R10 Parser (Secondary — Largest Consumer Install Base)
+
+Garmin R10 data is exported from the Garmin Golf app as CSV. The format looks roughly like:
+
+```
+Club,Ball Speed (mph),Launch Angle (°),Spin Rate (rpm),Carry (yd),Total (yd),Club Speed (mph),Smash Factor,Attack Angle (°),Club Path (°),Face Angle (°)
+Driver,148.2,12.3,2845,245,268,105.2,1.41,-1.2,2.1,0.8
+Driver,151.0,11.8,2650,252,275,107.1,1.41,-0.8,1.5,0.3
+7 Iron,120.5,18.4,6420,165,172,82.3,1.46,-3.2,0.5,-0.2
+```
 
 **Claude Code instructions:**
 1. Create `services/parsers/garmin_r10.py`
-2. Parse CSV, map column headers to `Shot` fields
-3. Flag outlier shots as `is_valid = False`
+2. Parse the CSV, map column headers to `Shot` fields
+3. Handle edge cases: missing columns, different column orderings, units
+4. Auto-detect club type from the "Club" column (map "Driver" → "driver", "7 Iron" → "7-iron", "PW" → "PW", etc.)
+5. Flag outlier shots as `is_valid = False` (e.g., ball speed < 50 mph for driver = likely a mishit)
+6. Return a list of `Shot` Pydantic objects
 
-### 1.6 — Generic CSV Parser
+### 1.6 — Generic CSV Parser (Fallback for All Other Monitors)
 
-Fallback for all other launch monitors (Rapsodo, Full Swing KIT, SkyTrak, Uneekor, FlightScope).
+For launch monitors we don't have specific parsers for yet (Rapsodo, Full Swing KIT, SkyTrak, Uneekor, FlightScope), build a generic parser that:
+1. Accepts a CSV file
+2. Presents a column mapping UI (or uses fuzzy matching on column headers)
+3. Maps columns to `Shot` fields using common synonyms:
+   - "Ball Speed", "BallSpeed", "Ball Spd" → `ball_speed`
+   - "Carry", "Carry Distance", "Carry Dist", "Carry (yd)" → `carry_distance`
+   - "Total Spin", "Spin Rate", "Spin", "Spin (rpm)" → `spin_rate`
+4. Stores the successful mapping so future uploads from the same monitor auto-map
 
 **Claude Code instructions:**
 1. Create `services/parsers/generic_csv.py`
 2. Build a header fuzzy matcher using a synonym dictionary
-3. Create `POST /ingest/upload` endpoint with auto-detection
+3. Create `POST /ingest/upload` endpoint that:
+   - Accepts a CSV file upload
+   - Auto-detects the launch monitor format (try Trackman CSV first, then Garmin, then Rapsodo, then generic)
+   - Parses and creates the `SwingSession` + `Shot` records
+   - Returns the session summary
+4. Add file hash deduplication — reject duplicate uploads
 
 ### 1.7 — Manual Entry
 
-Simple manual entry form for users who only remember their averages.
+Not everyone will have a CSV export. Build a simple manual entry form where users can type in their averages per club:
+
+```
+Club Type: Driver
+Avg Club Speed: 105 mph
+Avg Ball Speed: 150 mph
+Avg Launch Angle: 12.5°
+Avg Spin Rate: 2700 rpm
+Avg Carry: 250 yd
+```
+
+**Claude Code instructions:**
+1. Create `POST /ingest/manual` endpoint that accepts aggregated stats (not individual shots)
+2. Store as a single "synthetic" shot per club with `launch_monitor_type = "manual"`
+3. This is the lowest-fidelity input but captures users who hit balls at a fitting studio and only remember their averages
 
 ### 1.8 — Data Quality Tiering
 
+Because Trackman data is significantly richer than consumer monitor data, the fitting engine should weight recommendations by data source quality:
+
 ```python
 DATA_QUALITY_TIERS = {
-    "trackman_4_file":      {"tier": "platinum", "weight": 1.0},
-    "trackman_4_bridge":    {"tier": "platinum", "weight": 1.0},
-    "trackman_range_api":   {"tier": "gold",     "weight": 0.85},
-    "trackman_report_ocr":  {"tier": "silver",   "weight": 0.7},
-    "garmin_r10":           {"tier": "silver",    "weight": 0.7},
-    "generic_csv":          {"tier": "bronze",    "weight": 0.5},
-    "manual_entry":         {"tier": "bronze",    "weight": 0.3},
+    "trackman_4_file":      {"tier": "platinum", "weight": 1.0,  "has_club_data": True,  "has_spin_axis": True},
+    "trackman_4_bridge":    {"tier": "platinum", "weight": 1.0,  "has_club_data": True,  "has_spin_axis": True},
+    "trackman_range_api":   {"tier": "gold",     "weight": 0.85, "has_club_data": False, "has_spin_axis": False},
+    "trackman_report_ocr":  {"tier": "silver",   "weight": 0.7,  "has_club_data": True,  "has_spin_axis": True},
+    "garmin_r10":           {"tier": "silver",    "weight": 0.7,  "has_club_data": True,  "has_spin_axis": False},
+    "rapsodo_mlm2":         {"tier": "silver",    "weight": 0.7,  "has_club_data": True,  "has_spin_axis": False},
+    "fullswing_kit":        {"tier": "silver",    "weight": 0.7,  "has_club_data": True,  "has_spin_axis": True},
+    "generic_csv":          {"tier": "bronze",    "weight": 0.5,  "has_club_data": False, "has_spin_axis": False},
+    "manual_entry":         {"tier": "bronze",    "weight": 0.3,  "has_club_data": False, "has_spin_axis": False},
 }
 ```
 
+**Claude Code instructions:**
+1. Create `services/data_quality.py` with the tiering config above
+2. When computing swing profiles, weight shots by their data source tier
+3. In the UI, show a data quality badge: "Your driver profile is based on 47 Trackman shots (Platinum quality)" vs "Your driver profile is based on 12 Garmin R10 shots (Silver quality)"
+4. When recommending clubs, if the user only has Silver/Bronze data, show a prompt: "For more accurate recommendations, upload your Trackman session data or visit a Trackman Range facility"
+
 ### 1.9 — MVP User Journey Flows
 
+These are the actual end-to-end experiences a user will have with SwingFit at MVP launch. Claude Code should build the frontend flows to match these exactly.
+
 ```
-SCENARIO 1: GOLFTEC / Lesson Customer (OCR path) — ~90 seconds
-SCENARIO 2: Sim Bay / Fitting Studio (CSV export) — ~60 seconds
-SCENARIO 3: Garmin R10 Owner (CSV export) — ~60 seconds
-SCENARIO 4: "I Know My Numbers" (Manual entry) — ~3 minutes
+SCENARIO 1: GOLFTEC / Lesson Customer (Largest segment — OCR path)
+──────────────────────────────────────────────────────────────────
+Golfer takes a GOLFTEC lesson or fitting on Trackman
+    → Coach emails them a PDF summary report, OR
+    → Session data appears in their Trackman Golf app
+    → Golfer screenshots the app or saves the PDF
+    
+    → Opens SwingFit → "Upload Trackman Report"
+    → Drops in screenshot or PDF
+    → Claude Vision extracts all swing data automatically
+    → SwingFit shows extracted data in editable form:
+      "We found your driver data: 105 mph club speed, 
+       149 ball speed, 12.3° launch, 2845 rpm spin..."
+    → User confirms or tweaks any misread values → Save
+    → Sees swing profile + top 3 driver recommendations
+    
+    Total extra effort: ~90 seconds
+    Data quality: Silver (OCR-extracted averages)
+
+SCENARIO 2: Sim Bay / Fitting Studio Customer (CSV export path)
+──────────────────────────────────────────────────────────────────
+Golfer hits balls at an indoor sim bay or fitting studio
+    → Session ends, TPS has all the shot data
+    → Golfer (or staff) exports CSV from TPS:
+      Analyze → Table View → Export → Save as CSV
+    → Golfer emails it to themselves or saves to phone
+    
+    → Opens SwingFit → "Upload Session File"
+    → Drags-and-drops the CSV
+    → Parser auto-detects Trackman format, ingests all shots
+    → Sees full swing profile with per-shot data
+    → Gets top 3 driver recommendations with explanations
+    
+    Total extra effort: ~60 seconds
+    Data quality: Platinum (raw per-shot Trackman data)
+
+SCENARIO 3: Garmin R10 / Consumer Launch Monitor Owner
+──────────────────────────────────────────────────────────────────
+Golfer owns a Garmin R10, hits balls at the range
+    → Exports session from Garmin Golf app as CSV
+    
+    → Opens SwingFit → "Upload Session File"
+    → Drags-and-drops the CSV
+    → Parser auto-detects Garmin format, ingests all shots
+    → Sees swing profile + recommendations
+    
+    Total extra effort: ~60 seconds
+    Data quality: Silver (consumer monitor data)
+
+SCENARIO 4: "I Just Know My Numbers" (Manual entry fallback)
+──────────────────────────────────────────────────────────────────
+Golfer remembers their averages from a fitting or lesson
+    
+    → Opens SwingFit → "Enter My Numbers"
+    → Types in: club speed, ball speed, launch angle, 
+      spin rate, carry distance
+    → Sees swing profile + recommendations (lower confidence)
+    → Prompt: "Upload your Trackman report for better results"
+    
+    Total extra effort: ~3 minutes
+    Data quality: Bronze (self-reported averages)
 ```
+
+**Claude Code instructions for the Upload flow UI:**
+1. Build a single "Add Session" page with three clear options presented as cards:
+   - "Upload Trackman Report" (accepts images + PDFs) — with subtitle "Screenshot your Trackman app or forward your emailed report"
+   - "Upload Session File" (accepts CSV, TSF) — with subtitle "Export from Trackman TPS, Garmin Golf, or any launch monitor"
+   - "Enter My Numbers" (manual form) — with subtitle "Type in your averages if you don't have a file"
+2. For the OCR path, show a loading state while Claude Vision processes ("Reading your Trackman data..."), then display the editable confirmation form
+3. For file upload, show instant results — parsing is fast
+4. After any successful ingest, immediately redirect to the Swing Profile page showing their data + recommendations
 
 ---
 
@@ -464,7 +830,52 @@ This is the core IP. The engine takes a user's swing profile and recommends opti
 
 ### 2.1 — User Swing Profile
 
-Compute the user's swing profile from their shot data using `compute_swing_profile()`.
+Before recommending clubs, compute the user's swing profile from their shot data:
+
+```python
+# services/fitting_engine.py
+
+class SwingProfile:
+    """Computed from a user's shot history for a given club type."""
+    
+    club_type: str               # "driver", "7-iron", etc.
+    
+    # Central tendency
+    avg_club_speed: float
+    avg_ball_speed: float
+    avg_launch_angle: float
+    avg_spin_rate: float
+    avg_carry: float
+    avg_attack_angle: float | None
+    avg_club_path: float | None
+    avg_face_angle: float | None
+    
+    # Consistency / dispersion
+    std_carry: float             # standard deviation of carry distance
+    std_offline: float | None    # standard deviation of offline distance
+    shot_shape_tendency: str     # "draw", "fade", "straight", "variable"
+    miss_direction: str          # "left", "right", "both"
+    
+    # Derived
+    smash_factor: float
+    spin_loft_estimate: float    # launch angle + attack angle (approximation)
+    
+    # Confidence
+    sample_size: int             # number of valid shots
+    data_quality: str            # "high" (50+ shots), "medium" (20-49), "low" (<20)
+```
+
+**Claude Code instructions:**
+1. Create a function `compute_swing_profile(user_id, club_type) -> SwingProfile`
+2. Pull all valid shots for this user and club type
+3. Compute all the fields above using numpy (mean, std)
+4. Determine `shot_shape_tendency` from face_to_path averages:
+   - face_to_path < -2° → "draw"
+   - face_to_path > 2° → "fade"
+   - else → "straight"
+   - std of face_to_path > 4° → "variable"
+5. Set `data_quality` based on `sample_size`
+6. Create endpoint `GET /users/{id}/swing-profile?club_type=driver`
 
 ### 2.2 — Playwright Data Scrapers (Automated Club Database Population)
 
@@ -482,7 +893,7 @@ PLAYWRIGHT SCRAPERS (scheduled — daily for prices, weekly for specs)
     │   ├── cobragolf.com             (drivers, irons, wedges, fairways, hybrids)
     │   ├── mizunogolf.com            (primarily irons + wedges)
     │   ├── clevelandgolf.com         (wedges + putters primarily)
-    │   ├── srixon.com                (drivers, irons — same parent as Cleveland)
+    │   ├── srixon.com                (drivers, irons, balls — same parent as Cleveland)
     │   ├── pxg.com                   (full line, premium DTC)
     │   ├── honmagolf.com             (Japanese luxury, growing U.S. presence)
     │   └── touredge.com              (value/game-improvement, popular with seniors)
@@ -510,53 +921,499 @@ CLAUDE API (called per-user when they upload swing data)
 RECOMMENDATIONS (cached in Supabase, displayed on Shop page)
 ```
 
-**Phased rollout:**
+**Example OEM scraper:**
 
-- **Phase 1 (built):** Top 5 brands — TaylorMade, Callaway, Titleist, Ping, Cobra — drivers only. GlobalGolf + 2nd Swing pricing. MyGolfSpy reviews.
-- **Phase 2 (next sprint):** Add Mizuno, Cleveland/Srixon, PXG, Honma, Tour Edge. Expand all brands to full club categories (irons, wedges, fairways, hybrids, putters).
-- **Phase 3:** Additional review sources (Golf Digest, GolfWRX). Additional retailer pricing (Callaway Pre-Owned, Amazon).
+```python
+# scripts/scrapers/titleist_drivers.py
+
+from playwright.async_api import async_playwright
+import json
+
+async def scrape_titleist_drivers():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        
+        await page.goto("https://www.titleist.com/golf-clubs/drivers")
+        await page.wait_for_selector(".product-card", timeout=10000)
+        
+        products = await page.query_selector_all(".product-card")
+        
+        clubs = []
+        for product in products:
+            # Navigate to product detail page for full specs
+            link = await product.query_selector("a")
+            detail_url = await link.get_attribute("href")
+            
+            detail_page = await browser.new_page()
+            await detail_page.goto(f"https://www.titleist.com{detail_url}")
+            await detail_page.wait_for_selector(".product-specs")
+            
+            name = await detail_page.inner_text(".product-title")
+            price = await detail_page.inner_text(".product-price")
+            
+            # Extract spec table
+            spec_rows = await detail_page.query_selector_all(".spec-row")
+            specs = {}
+            for row in spec_rows:
+                label = await row.query_selector(".spec-label")
+                value = await row.query_selector(".spec-value")
+                specs[await label.inner_text()] = await value.inner_text()
+            
+            clubs.append({
+                "brand": "Titleist",
+                "model_name": name,
+                "model_year": 2026,  # parse from page
+                "club_type": "driver",
+                "msrp": parse_price(price),
+                "loft_options": specs.get("Loft"),
+                "shaft_options": specs.get("Shaft"),
+                "head_weight": specs.get("Head Weight"),
+                "adjustable": "SureFit" in str(specs),
+                "source_url": f"https://www.titleist.com{detail_url}",
+            })
+            
+            await detail_page.close()
+        
+        await browser.close()
+        return clubs
+```
+
+**Example retailer pricing scraper:**
+
+```python
+# scripts/scrapers/globalgolf_prices.py
+
+async def scrape_globalgolf_prices(club_model: str):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        
+        # Search for the club
+        search_url = f"https://www.globalgolf.com/search/?q={club_model.replace(' ', '+')}"
+        await page.goto(search_url)
+        await page.wait_for_selector(".product-listing")
+        
+        results = await page.query_selector_all(".product-listing .product-item")
+        
+        prices = []
+        for result in results[:5]:  # top 5 results
+            name = await result.inner_text(".product-name")
+            price = await result.inner_text(".product-price")
+            condition = await result.inner_text(".product-condition")  # "New", "Like New", "Good", etc.
+            url = await result.query_selector("a")
+            link = await url.get_attribute("href")
+            
+            prices.append({
+                "retailer": "globalgolf",
+                "price": parse_price(price),
+                "condition": condition,
+                "url": f"https://www.globalgolf.com{link}",
+            })
+        
+        await browser.close()
+        return prices
+```
+
+**Example review scraper (for performance characteristics):**
+
+```python
+# scripts/scrapers/mygolfspy_reviews.py
+
+async def scrape_mygolfspy_driver_review(club_model: str):
+    """
+    Scrape MyGolfSpy review for a specific club model.
+    Returns performance data and editorial description.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        
+        # Search MyGolfSpy for the review
+        search_url = f"https://mygolfspy.com/?s={club_model.replace(' ', '+')}"
+        await page.goto(search_url)
+        
+        # Find and click the review article
+        review_link = await page.query_selector("article a")
+        if review_link:
+            await review_link.click()
+            await page.wait_for_load_state("networkidle")
+            
+            # Extract the review content
+            content = await page.inner_text("article .entry-content")
+            
+            # Extract any performance data tables
+            tables = await page.query_selector_all("table")
+            performance_data = []
+            for table in tables:
+                rows = await table.query_selector_all("tr")
+                for row in rows:
+                    cells = await row.query_selector_all("td")
+                    cell_texts = [await c.inner_text() for c in cells]
+                    performance_data.append(cell_texts)
+            
+            return {
+                "review_text": content[:2000],  # first 2000 chars for context
+                "performance_data": performance_data,
+                "source_url": page.url,
+            }
+        
+        await browser.close()
+        return None
+```
+
+**Scraper orchestrator (runs on schedule):**
+
+```python
+# scripts/scrapers/run_all.py
+
+async def refresh_club_database():
+    """Run all scrapers and update Supabase."""
+    
+    # 1. Scrape OEM sites for specs (weekly)
+    titleist_clubs = await scrape_titleist_drivers()
+    taylormade_clubs = await scrape_taylormade_drivers()
+    callaway_clubs = await scrape_callaway_drivers()
+    ping_clubs = await scrape_ping_drivers()
+    cobra_clubs = await scrape_cobra_drivers()
+    
+    all_clubs = titleist_clubs + taylormade_clubs + callaway_clubs + ping_clubs + cobra_clubs
+    
+    # 2. For each club, scrape pricing from retailers (daily)
+    for club in all_clubs:
+        club["prices"] = {
+            "globalgolf": await scrape_globalgolf_prices(club["model_name"]),
+            "second_swing": await scrape_2ndswing_prices(club["model_name"]),
+        }
+    
+    # 3. For each club, scrape review data for performance context (weekly)
+    for club in all_clubs:
+        review = await scrape_mygolfspy_driver_review(club["model_name"])
+        if review:
+            club["review_summary"] = review["review_text"]
+            club["performance_data"] = review["performance_data"]
+    
+    # 4. Upsert into Supabase
+    for club in all_clubs:
+        await upsert_club_spec(club)
+        await upsert_price_cache(club["model_name"], club["prices"])
+    
+    print(f"Updated {len(all_clubs)} clubs in database")
+```
 
 **Claude Code instructions:**
 1. Install Playwright: `pip install playwright && playwright install chromium`
-2. Create `scripts/scrapers/` directory with one scraper per OEM/retailer/review site
-3. Each OEM scraper extracts at minimum: brand, model_name, model_year, club_type, loft, msrp, shaft_options, adjustable, key technology
-4. Create `scripts/scrapers/run_all.py` orchestrator with error handling per scraper
-5. Add rate limiting (2-3s delays), User-Agent rotation, scrape logging
+2. Create `scripts/scrapers/` directory with one scraper file per OEM site:
+   - `taylormade_specs.py` — taylormadegolf.com (drivers, irons, fairways, hybrids, wedges)
+   - `callaway_specs.py` — callawaygolf.com (full line)
+   - `titleist_specs.py` — titleist.com (full line)
+   - `ping_specs.py` — ping.com (full line)
+   - `cobra_specs.py` — cobragolf.com (full line)
+   - `mizuno_specs.py` — mizunogolf.com (primarily irons + wedges)
+   - `cleveland_specs.py` — clevelandgolf.com (wedges + putters)
+   - `srixon_specs.py` — srixon.com (drivers, irons — same parent company as Cleveland)
+   - `pxg_specs.py` — pxg.com (full line, premium DTC brand)
+   - `honma_specs.py` — honmagolf.com (Japanese luxury, U.S. line)
+   - `touredge_specs.py` — touredge.com (value/game-improvement line)
+3. Each scraper should extract ALL club categories, not just drivers: drivers, fairway woods, hybrids, iron sets, wedges, and putters
+4. Create retailer pricing scrapers: `globalgolf_prices.py`, `second_swing_prices.py`
+5. Create review scraper: `mygolfspy_reviews.py`
+6. Create `scripts/scrapers/run_all.py` orchestrator that runs all scrapers and upserts to Supabase
+7. Add error handling — individual scraper failures should not stop the full run
+8. Add rate limiting — 2-3 second delays between page loads to avoid getting blocked
+9. Add User-Agent rotation for retailer scrapers
+10. Create a Supabase `scrape_logs` table to track when each scraper last ran and whether it succeeded
+11. For MVP Phase 1, start with just the top 5 brands (TaylorMade, Callaway, Titleist, Ping, Cobra) for drivers only. Phase 2 adds the remaining 5 brands + all club categories.
+12. Run locally via `python scripts/scrapers/run_all.py` — schedule via cron or a simple task runner later
 
 ### 2.3 — Claude API Recommendation Engine (Replaces Static Scoring)
 
 Instead of a hand-coded scoring formula, the recommendation engine sends the user's swing profile + the club database to Claude's API and gets back intelligent, contextual recommendations.
 
 **Why this is better than a static scoring algorithm:**
-- Claude understands fitting nuances impossible to capture in a formula
-- Editorial-quality explanations come naturally
-- As Claude improves, recommendations automatically get better
-- Can recommend full builds (head + shaft + specs) like Club Champion
+- Claude understands the nuances of club fitting that are impossible to capture in a formula (e.g., "this club tends to produce a higher peak trajectory which helps in windy conditions" or "the offset design helps players who struggle with an open face at impact")
+- Claude can reference its training knowledge about how clubs actually perform in real-world testing, not just OEM spec sheets
+- The editorial-quality explanations come naturally — no need to build a template system
+- As Claude's knowledge improves, your recommendations automatically get better with zero code changes
 
 **The recommendation flow:**
 
 ```
 User uploads Trackman data
-    → compute SwingProfile (math — stays as-is)
-    → hard-filter clubs by type, speed range, budget
-    → send profile + candidates to Claude API (claude-sonnet-4-20250514)
-    → Claude returns top 5 with scores, explanations, projected changes
-    → cache in recommendations table
-    → frontend reads from cache (fast, no API call)
+    │
+    ▼
+Backend computes SwingProfile (avg speeds, launch, spin, dispersion, shot shape)
+    │
+    ▼
+Backend queries Supabase for all clubs matching the club_type + within budget
+    │
+    ▼
+Backend sends SwingProfile + club list to Claude API with fitting prompt
+    │
+    ▼
+Claude returns top 5 recommendations with match scores + explanations
+    │
+    ▼
+Backend caches recommendations in Supabase `recommendations` table
+    │
+    ▼
+Frontend displays on Shop page (loads from cache, not re-calling Claude)
 ```
 
-**Caching:** Only re-generate when user uploads new data, changes preferences, or club database refreshes.
+**The recommendation service:**
 
-**Cost tracking:** Log each Claude API call to `api_usage` table.
+```python
+# services/fitting_engine.py
 
-**Endpoints:**
-- `POST /fitting/recommend` — triggers Claude API recommendation generation
-- `GET /fitting/recommendations` — reads cached recommendations (fast)
-- `POST /fitting/compare` — Claude side-by-side comparison of two clubs
+import anthropic
+import json
+from .swing_profile import compute_swing_profile
+
+class FittingEngine:
+    
+    def __init__(self):
+        self.client = anthropic.Anthropic()
+    
+    FITTING_PROMPT = """You are an expert golf club fitter with 20 years of experience 
+    and deep knowledge of every major club model from the last 5 years. You combine 
+    Trackman data analysis with practical fitting expertise. You approach fittings the 
+    way Club Champion does — methodical, data-driven, and focused on the complete build 
+    (not just the head, but shaft, grip, and spec adjustments).
+
+    PLAYER PROFILE:
+    {player_profile}
+
+    SWING DATA:
+    {swing_profile}
+
+    CURRENT EQUIPMENT:
+    {current_equipment}
+
+    AVAILABLE CLUBS IN OUR DATABASE:
+    {available_clubs}
+
+    Based on this golfer's swing characteristics, goals, and current equipment, recommend 
+    the TOP 5 clubs from the available list that would best optimize their ball flight 
+    and performance.
+
+    CRITICAL: Like a real club fitter, don't just recommend a clubhead — recommend the 
+    FULL BUILD. Club Champion fits shaft first, then head, then fine-tunes specs. Your 
+    recommendations should reflect this approach.
+
+    For each recommendation, provide:
+    1. match_score: 0-100 (how well this complete build fits THIS specific golfer)
+    2. explanation: 2-3 sentences in a conversational, editorial tone explaining WHY 
+       this club fits their swing. Reference their specific numbers (e.g., "Your 3,100 rpm 
+       spin rate is about 600 rpm above optimal for your 105 mph club speed..."). 
+       Compare to their current equipment when possible.
+       Make it sound like a knowledgeable friend explaining the recommendation, not a 
+       technical readout.
+    3. projected_changes: What specific performance changes they should expect compared 
+       to their CURRENT club (e.g., "Expect 200-400 rpm spin reduction and 8-12 yards 
+       more carry vs your current SIM2 Max")
+    4. best_for: A short tag like "Best for spin reduction" or "Best all-around match"
+    5. recommended_build: Full build spec including:
+       - head: model name + recommended loft setting (including adjustments if applicable)
+       - shaft: specific shaft model + flex + weight (e.g., "Project X HZRDUS Smoke Black 60g, Stiff")
+       - grip: grip recommendation based on preference
+       - length: recommended length
+       - adjustments: any loft/lie tweaks (e.g., "Set hosel to -1° for optimal launch")
+       - swingweight: target swingweight if relevant
+
+    Consider these fitting principles:
+    - Club Champion isolates shaft first, then head — the shaft has more impact on 
+      consistency and feel than the head
+    - For drivers: optimal launch angle is roughly 12-15° depending on speed, optimal 
+      spin is roughly 2000-2500 rpm for 100-110 mph club speeds
+    - Higher swing speeds generally need lower spin and lower launch
+    - Players with high dispersion benefit from higher-MOI, more forgiving heads
+    - Players with a fade tendency might benefit from draw-biased designs, but don't 
+      over-correct — a consistent fade is better than a variable shot shape
+    - Attack angle matters — a negative attack angle with a high-loft driver creates 
+      excess spin
+    - Shaft weight and flex affect tempo and consistency — recommend based on club speed 
+      and swing tempo
+    - Consider the player's goals from their profile — distance vs accuracy vs all-around
+
+    Respond ONLY with valid JSON in this exact format, no other text:
+    {
+        "recommendations": [
+            {
+                "club_spec_id": "uuid-from-the-available-clubs-list",
+                "match_score": 94,
+                "explanation": "Your spin rate of 3,100 rpm is about 600 rpm above...",
+                "projected_changes": "Expect 200-400 rpm spin reduction...",
+                "best_for": "Best for spin reduction",
+                "recommended_build": {
+                    "head": "Titleist TSR3, 9.0° (set to 8.5° via SureFit)",
+                    "shaft": "Project X HZRDUS Smoke Black 60g, Stiff",
+                    "grip": "Golf Pride Tour Velvet, Standard",
+                    "length": "45.5 inches",
+                    "adjustments": "SureFit set to A1 (-0.75° loft, neutral lie)",
+                    "swingweight": "D3"
+                }
+            }
+        ]
+    }
+    """
+    
+    async def generate_recommendations(
+        self, 
+        user_id: str, 
+        club_type: str, 
+        budget_max: float = None,
+        include_used: bool = True
+    ) -> list[dict]:
+        
+        # 1. Compute the user's swing profile
+        profile = await compute_swing_profile(user_id, club_type)
+        
+        # 2. Query available clubs from Supabase
+        query = supabase.table("club_specs").select("*").eq("club_type", club_type)
+        if budget_max:
+            if include_used:
+                query = query.lte("avg_used_price", budget_max)
+            else:
+                query = query.lte("msrp", budget_max)
+        clubs = query.execute().data
+        
+        # 3. Format for the prompt
+        profile_text = format_swing_profile(profile)
+        clubs_text = format_club_list(clubs)
+        
+        prompt = self.FITTING_PROMPT.format(
+            player_profile=format_player_profile(user_id),
+            swing_profile=profile_text,
+            current_equipment=format_current_equipment(user_id, club_type),
+            available_clubs=clubs_text
+        )
+        
+        # 4. Call Claude API
+        response = self.client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        result = json.loads(response.content[0].text)
+        
+        # 5. Enrich with pricing and affiliate links
+        for rec in result["recommendations"]:
+            club = next(c for c in clubs if c["id"] == rec["club_spec_id"])
+            rec["club"] = club
+            rec["buy_links"] = await get_buy_links(club, include_used)
+        
+        # 6. Cache in Supabase
+        for rec in result["recommendations"]:
+            await supabase.table("recommendations").upsert({
+                "user_id": user_id,
+                "club_type": club_type,
+                "club_spec_id": rec["club_spec_id"],
+                "match_score": rec["match_score"],
+                "explanation": rec["explanation"],
+                "projected_changes": rec["projected_changes"],
+                "best_for": rec["best_for"],
+            }).execute()
+        
+        return result["recommendations"]
+
+
+def format_swing_profile(profile) -> str:
+    """Format swing profile for the Claude prompt."""
+    return f"""
+    Club Type: {profile.club_type}
+    Club Speed: {profile.avg_club_speed} mph
+    Ball Speed: {profile.avg_ball_speed} mph
+    Launch Angle: {profile.avg_launch_angle}°
+    Spin Rate: {profile.avg_spin_rate} rpm
+    Carry Distance: {profile.avg_carry} yards
+    Attack Angle: {profile.avg_attack_angle}° ({"negative = hitting down" if profile.avg_attack_angle and profile.avg_attack_angle < 0 else "positive = hitting up"})
+    Club Path: {profile.avg_club_path}°
+    Face Angle: {profile.avg_face_angle}°
+    Shot Shape: {profile.shot_shape_tendency}
+    Dispersion (std of carry): ±{profile.std_carry} yards
+    Dispersion (std of offline): ±{profile.std_offline} yards
+    Smash Factor: {profile.smash_factor}
+    Sample Size: {profile.sample_size} shots
+    Data Quality: {profile.data_quality}
+    """
+
+
+def format_player_profile(user_id: str) -> str:
+    """Format player profile from onboarding data (Club Champion-style player intake)."""
+    profile = supabase.table("profiles").select("*").eq("id", user_id).single().execute().data
+    return f"""
+    Handicap: {profile.get('handicap', 'Not provided')}
+    Play Frequency: {profile.get('play_frequency', 'Not provided')}
+    Goals: {profile.get('goals', 'Not provided')}
+    Budget: ${profile.get('budget_max', 'No limit')} per club
+    Include Used: {'Yes' if profile.get('include_used_clubs', True) else 'No'}
+    """
+
+
+def format_current_equipment(user_id: str, club_type: str) -> str:
+    """Format the user's current equipment for before/after comparison."""
+    equipment = supabase.table("user_equipment").select("*").eq("user_id", user_id).eq("club_type", club_type).execute().data
+    if not equipment:
+        return "No current equipment listed."
+    eq = equipment[0]
+    return f"""
+    Current {club_type}: {eq.get('brand', '?')} {eq.get('model', '?')} ({eq.get('year', '?')})
+    Loft: {eq.get('loft', '?')}°
+    Shaft: {eq.get('shaft', 'Unknown')}
+    """
+
+
+def format_club_list(clubs: list[dict]) -> str:
+    """Format club list for the Claude prompt."""
+    lines = []
+    for club in clubs:
+        lines.append(
+            f"ID: {club['id']} | {club['brand']} {club['model_name']} | "
+            f"{club['model_year']} | Loft: {club['loft']}° | "
+            f"MSRP: ${club['msrp']} | Used: ${club.get('avg_used_price', 'N/A')} | "
+            f"Launch bias: {club.get('launch_bias', 'N/A')} | "
+            f"Spin bias: {club.get('spin_bias', 'N/A')} | "
+            f"Speed range: {club.get('swing_speed_min', '?')}-{club.get('swing_speed_max', '?')} mph | "
+            f"Review: {club.get('review_summary', 'No review data')[:200]}"
+        )
+    return "\n".join(lines)
+```
+
+**Claude Code instructions:**
+1. Replace the existing `services/fitting_engine.py` with the Claude API-based engine above
+2. The `compute_swing_profile` function stays the same (Section 2.1) — the swing profile computation is still math, not LLM
+3. Create `POST /fitting/recommend` endpoint that calls `FittingEngine.generate_recommendations()`
+4. Add response caching — store recommendations in Supabase and only re-generate when:
+   - The user uploads new session data
+   - The club database is refreshed (new clubs scraped)
+   - The user changes their budget or preferences
+5. Add a `GET /recommendations/{user_id}` endpoint that reads from the cache (fast, no Claude API call)
+6. Add error handling for Claude API failures — if the API call fails, return cached recommendations if available, or a helpful error message
+7. Cost tracking — log each Claude API call with token count and estimated cost to a `api_usage` table
 
 ### 2.4 — Comparison Mode
 
-Send two clubs + user profile to Claude for side-by-side analysis with projected performance changes.
+Let users compare their current club's performance against what the recommended club would theoretically deliver:
+
+```
+YOUR CURRENT DRIVER: TaylorMade SIM2 Max (10.5°)
+  Avg Carry: 248 yd | Launch: 14.2° | Spin: 3100 rpm
+
+RECOMMENDED: Titleist TSR3 (9.0°)
+  Projected Carry: 258 yd | Launch: 12.8° | Spin: 2650 rpm
+  Estimated gain: +10 yards carry
+
+WHY: Your spin rate is ~600 rpm above optimal for your 
+club speed (105 mph). The TSR3's lower-spin profile 
+should reduce spin without sacrificing launch.
+```
+
+**Claude Code instructions:**
+1. Create `POST /fitting/compare` endpoint
+2. Input: `user_id`, `club_type`, `current_club_id` (or specs), `recommended_club_id`
+3. Send both clubs + the user's swing profile to Claude API for a comparison analysis
+4. Keep projections conservative — use ranges not exact numbers ("8-12 yards" not "10 yards")
 
 ---
 
@@ -564,11 +1421,88 @@ Send two clubs + user profile to Claude for side-by-side analysis with projected
 
 ### 3.1 — Affiliate Link Router
 
-Route users to retailers with affiliate tags. Current configs: GlobalGolf (CJ, 8%), 2nd Swing (ShareASale, 7%), Callaway Pre-Owned (Partnerize, 6%), TaylorMade (Sovrn, 5%), Amazon (Associates, 4%).
+When a user clicks "Buy This Club," route them to the best available retailer with your affiliate tag.
+
+```python
+# services/affiliate_router.py
+
+AFFILIATE_CONFIGS = {
+    "global_golf": {
+        "base_url": "https://www.globalgolf.com",
+        "affiliate_network": "cj",
+        "affiliate_id": "YOUR_CJ_ID",
+        "commission_rate": 0.08,
+        "cookie_days": 30,
+        "supports_used": True,
+    },
+    "callaway_preowned": {
+        "base_url": "https://www.callawaygolfpreowned.com",
+        "affiliate_network": "partnerize",
+        "affiliate_id": "YOUR_PARTNERIZE_ID",
+        "commission_rate": 0.06,
+        "cookie_days": 45,
+        "supports_used": True,
+        "brands": ["Callaway", "Odyssey"],  # brand-restricted
+    },
+    "taylormade": {
+        "base_url": "https://www.taylormadegolf.com",
+        "affiliate_network": "sovrn",
+        "affiliate_id": "YOUR_SOVRN_ID",
+        "commission_rate": 0.05,
+        "cookie_days": 30,
+        "supports_used": False,
+        "brands": ["TaylorMade"],
+    },
+    # ... more retailers
+}
+
+def get_buy_links(club: ClubSpec, include_used: bool = True) -> list[dict]:
+    """
+    Returns ranked list of purchase options with affiliate links.
+    Prioritizes: best price → highest commission → cookie duration.
+    """
+    links = []
+    for retailer_key, config in AFFILIATE_CONFIGS.items():
+        # Check brand restrictions
+        if config.get("brands") and club.brand not in config["brands"]:
+            continue
+        # Check used support
+        if not config["supports_used"] and not club.still_in_production:
+            continue
+        
+        link = build_affiliate_url(config, club)
+        links.append({
+            "retailer": retailer_key,
+            "url": link,
+            "estimated_price": get_cached_price(retailer_key, club),
+            "condition": "new" if club.still_in_production else "used",
+            "commission_rate": config["commission_rate"],
+        })
+    
+    # Sort by price ascending
+    links.sort(key=lambda x: x["estimated_price"] or float("inf"))
+    return links
+```
+
+**Claude Code instructions:**
+1. Create `services/affiliate_router.py` with the retailer config structure
+2. Create `GET /clubs/{id}/buy-links` endpoint
+3. For MVP, start with just 3 retailers: GlobalGolf (CJ Affiliate), Callaway Pre-Owned (Partnerize), and Amazon (Associates)
+4. Build the URL construction logic per affiliate network
+5. Add click tracking: `POST /affiliate/click` — log every outbound click with user_id, club_id, retailer, timestamp
+6. This click log is your revenue attribution data
 
 ### 3.2 — Price Caching (Powered by Playwright Scrapers)
 
-Prices scraped by Playwright and cached. Frontend reads from cache, never hits retailer sites directly. Staleness check for prices older than 48 hours.
+Prices are scraped by the Playwright retailer scrapers (Section 2.2) and cached in Supabase. The Shop page reads from the cache, never hits retailer sites directly.
+
+**Claude Code instructions:**
+1. Create a `price_cache` table in Supabase: club_spec_id, retailer, price, condition (new/used/like_new), product_url, last_checked, is_available
+2. The Playwright scrapers (Section 2.2) write to this table on each run
+3. Create `GET /clubs/{id}/prices` endpoint that reads from the cache
+4. Frontend Shop page calls this endpoint to show pricing rows under each recommendation card
+5. Add a staleness check — if `last_checked` is older than 48 hours, show a small note: "Prices may have changed. Last checked 3 days ago."
+6. For MVP, if Playwright scrapers aren't built yet, manually enter prices for the top 20 clubs to unblock the frontend
 
 ---
 
@@ -577,31 +1511,130 @@ Prices scraped by Playwright and cached. Frontend reads from cache, never hits r
 ### 4.1 — Pages & User Flow
 
 ```
-Landing Page → Sign Up / Login → Dashboard
-    ├── Upload Session (OCR / CSV / Manual)
-    ├── My Bag (current clubs + performance)
-    ├── Get Fitted (recommendations with Claude explanations)
-    └── Settings (profile, budget, units)
+Landing Page
+    │
+    ▼
+Sign Up / Login
+    │
+    ▼
+Dashboard
+    ├── Upload Session (drag-drop CSV or manual entry)
+    │       │
+    │       ▼
+    │   Session Summary (stats table, shot dispersion chart)
+    │
+    ├── My Bag (current clubs + performance data per club)
+    │
+    ├── Get Fitted (select club type → see recommendations)
+    │       │
+    │       ▼
+    │   Recommendation Cards
+    │       ├── Club name, image, score, explanation
+    │       ├── "Compare to my current" toggle
+    │       └── "Buy" button → affiliate link
+    │
+    └── Settings (profile, budget preferences, units)
 ```
+
+**Claude Code instructions:**
+1. Set up React project with Vite, Tailwind CSS, React Router
+2. Build pages in this order:
+   a. **Upload page** — drag-drop CSV zone + manual entry form
+   b. **Session summary** — table of shot stats + basic charts (use Recharts)
+   c. **Recommendation page** — card layout showing top 5 clubs with scores
+   d. **Dashboard** — overview of sessions, swing trends over time
+3. Use mobile-first responsive design — most golfers will use this at the range on their phone
+4. Keep it clean and simple — no unnecessary UI complexity
 
 ### 4.2 — Key UI Components
 
-Recommendation cards with match scores, editorial explanations, buy links, and comparison toggles. Swing profile summary with data quality badges.
+**Recommendation Card:**
+```
+┌────────────────────────────────────┐
+│  🏆 #1 MATCH — 94/100             │
+│                                    │
+│  Titleist TSR3 Driver (9.0°)       │
+│  2023 | MSRP $599 | Used ~$380     │
+│                                    │
+│  WHY IT FITS:                      │
+│  Your spin is 600 rpm above        │
+│  optimal. This low-spin head       │
+│  should add 8-12 yards carry.      │
+│                                    │
+│  [Compare to Mine]  [Buy — $380]   │
+└────────────────────────────────────┘
+```
+
+**Swing Profile Summary:**
+```
+┌────────────────────────────────────┐
+│  YOUR DRIVER PROFILE               │
+│  Based on 47 shots (High Quality)  │
+│                                    │
+│  Club Speed:   105.2 mph           │
+│  Ball Speed:   149.8 mph           │
+│  Launch:       14.2° (▲ high)      │
+│  Spin:         3,100 rpm (▲ high)  │
+│  Carry:        248 yd              │
+│  Dispersion:   ±18 yd             │
+│  Shot Shape:   Fade tendency       │
+│                                    │
+│  ⚠️ Opportunity: Spin reduction    │
+│  could add 8-15 yards              │
+└────────────────────────────────────┘
+```
 
 ---
 
 ## Phase 5: Polish & Launch (Weeks 12–16)
 
 ### 5.1 — Additional Parsers & Trackman Expansion
-### 5.2 — Subscription & Paywall (Free tier + Pro at $7.99/mo)
+- Rapsodo MLM2 Pro (CSV export)
+- Full Swing KIT (CSV/JSON export from Full Swing app)
+- SkyTrak / Uneekor (sim users)
+- FlightScope Mevo+ (CSV export)
+- **Trackman 4 Desktop Bridge app** (Electron or Python GUI) — Package the tm4_bridge.py CLI into a proper desktop app with:
+  - Auto-discovery of Trackman on local network
+  - One-click connect + arm
+  - Real-time shot display in a local UI
+  - Background sync to SwingFit cloud
+- **Trackman Range partnership** — With working code and user traction, approach Trackman for official Range API credentials
+
+### 5.2 — Subscription & Paywall
+- **Free tier:** Upload 1 session, get 1 club recommendation (driver only)
+- **Pro tier ($7.99/mo or $59.99/yr):**
+  - Unlimited sessions & history
+  - Full bag recommendations (driver + irons + wedges + putter)
+  - New club alerts ("A new driver just released that's a 96% match for your swing")
+  - Trend tracking over time
+  - Comparison mode
+
+**Claude Code instructions:**
+1. Integrate Stripe for subscription management
+2. Create middleware that checks subscription tier before allowing access to Pro endpoints
+3. Use Stripe webhooks for subscription lifecycle events
+
 ### 5.3 — New Club Alerts (Retention Feature)
-### 5.4 — SEO / Content (Auto-generated club landing pages)
+When a new club model is added to the database:
+1. Run it through the fitting engine against all Pro users' swing profiles
+2. If it scores in their top 3 for any club type, send a push notification / email:
+   "New release: The 2026 Callaway Paradym Ai Smoke driver scores 96/100 for your swing — 4 points higher than your current top pick."
+
+### 5.4 — SEO / Content
+- Auto-generate landing pages for each club in the database:
+  `/clubs/taylormade-qi10-driver` with specs, pricing, and "see if it fits your swing" CTA
+- These pages drive organic traffic from golfers searching for club reviews
 
 ---
 
 ## Phase 6: B2B Licensing (Months 6+)
 
-White-label the fitting engine for independent club fitters, pro shops, and launch monitor companies.
+Once the consumer product is validated, white-label the fitting engine for:
+- **Independent club fitters** — $49-99/mo to use the engine during in-person fittings
+- **Pro shops** — embed recommendations on their e-commerce sites
+- **Launch monitor companies** — license the engine as a built-in feature of their apps (Garmin, Rapsodo, etc.)
+
+This is the long-term high-margin play and doesn't need to be built until the core consumer product works.
 
 ---
 
@@ -612,24 +1645,38 @@ White-label the fitting engine for independent club fitters, pro shops, and laun
 | Backend language | Python/FastAPI | Danny's existing expertise, fast iteration, numpy for stats |
 | Database | PostgreSQL | Relational data, good for analytics queries on shot data |
 | Frontend | React (Vite) | Modern, fast, huge ecosystem, easy Capacitor wrap later |
-| Auth | Supabase Auth | Simple, handles social login |
-| Payments | Stripe | Industry standard subscription management |
-| Recommendations | Claude API (Sonnet) | Better than static scoring, editorial explanations |
-| Club data | Playwright scrapers | Automated, always fresh, 11 brands planned |
-| Affiliate tracking | Custom + network SDKs | CJ, ShareASale, Partnerize, Amazon Associates |
+| Hosting (MVP) | Railway or Render | Fast deploy, free tier, no infra management |
+| Auth | Supabase Auth or JWT | Simple, cheap, handles social login |
+| Payments | Stripe | Industry standard, good subscription management |
+| Affiliate tracking | Custom + network SDKs | CJ, Partnerize, Amazon Associates APIs |
+| Charts | Recharts | React-native, lightweight, handles all needed chart types |
 
 ---
 
-## MVP Definition
+## MVP Definition (What to ship first)
 
-1. ✅ Upload Trackman report via screenshot/PDF (Claude Vision OCR)
-2. ✅ Upload Trackman/Garmin CSV
-3. ✅ Manual entry fallback
-4. ✅ Editable confirmation step for OCR data
-5. ✅ Swing profile summary with data quality tier
-6. ✅ Top 5 driver recommendations with Claude explanations
-7. ✅ Buy links (affiliate links to GlobalGolf, 2nd Swing)
-8. ✅ User accounts with session history
+The absolute minimum to get in front of users and validate demand:
+
+1. ✅ Upload a Trackman report via screenshot or PDF (Claude Vision OCR extraction — this is the primary onboarding path)
+2. ✅ Upload a Trackman CSV/TSF export (for users with TPS access)
+3. ✅ Upload a Garmin R10 CSV (secondary path for consumer monitor owners)
+4. ✅ Manual entry fallback for users without files
+5. ✅ Editable confirmation step for OCR-extracted data (user verifies before saving)
+6. ✅ See your swing profile summary for driver (with data quality tier badge)
+7. ✅ Get top 3 driver recommendations with explanations
+8. ✅ Click through to buy (affiliate link to GlobalGolf)
+9. ✅ User accounts with session history
+
+**What's NOT in MVP:**
+- ❌ Trackman Range API real-time integration (needs partnership credentials)
+- ❌ Trackman 4 desktop bridge app (complex, niche)
+- ❌ Iron/wedge/putter recommendations (just driver)
+- ❌ Subscription paywall (everything free at first)
+- ❌ Price scraping (manual price entry)
+- ❌ Mobile app (responsive web only)
+- ❌ B2B features
+
+Ship the MVP, get 50-100 golfers using it (target Trackman users first — they're the most data-savvy and equipment-obsessed segment), watch what they do, then iterate.
 
 ---
 
@@ -637,8 +1684,14 @@ White-label the fitting engine for independent club fitters, pro shops, and laun
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Club spec data hard to source at scale | High | High | Start with top 50 manually; Playwright scrapers for scale |
-| Trackman Range API access denied | High | High | MVP works on file uploads alone |
-| Launch monitor APIs don't exist / change | High | Medium | Build on CSV export (universal) |
-| Low conversion on affiliate links | Medium | Medium | Stack with subscription revenue |
-| Existing competitors copy approach | Medium | Low | Speed to market + data flywheel |
+| Club spec data is hard to source at scale | High | High | Start with top 50 models manually; quality > quantity |
+| Recommendation accuracy questioned | Medium | High | Always show confidence level; be transparent about data quality thresholds |
+| Trackman Range API access denied or delayed | High | High | MVP works entirely on file uploads (no API needed). Build the client code, demo it, then approach Trackman. File upload alone captures most Trackman users. |
+| Trackman changes export formats or locks down data further | Medium | High | Support multiple ingest paths so no single pathway is a single point of failure. SwingSync intermediary is a hedge. |
+| Trackman 4 TCP/IP protocol undocumented / changes | High | Medium | The bridge app is Phase 5+, not MVP. File export is the reliable path. Community has already reverse-engineered the protocol for sim software. |
+| MyTrackman.com never opens a consumer API | High | Medium | Not a blocker — file export + Range API + bridge cover all use cases. If they do open an API, it's upside. |
+| Launch monitor APIs don't exist / change | High | Medium | Build on CSV export (universal) not APIs; API integration is a bonus |
+| Affiliate programs reject application | Medium | Medium | Apply early; start with Amazon (easy approval) and add others |
+| Low conversion on affiliate links | Medium | Medium | Stack with subscription revenue; affiliate is gravy not the whole meal |
+| Existing player (UFIT, TRUEGolfFit) copies the real-time approach | Medium | Low | Speed to market + data flywheel = moat compounds over time |
+| Trackman users don't know how to export their data | Medium | Medium | Build step-by-step export guides with screenshots for each pathway (TPS CSV, TPS stroke file, SwingSync). Make it dead simple. |
