@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     stripe_price_monthly: str = ""
     stripe_price_yearly: str = ""
     frontend_url: str = "http://localhost:5173"
+    supabase_jwt_secret: str = ""
 
     model_config = {"env_file": ".env"}
 

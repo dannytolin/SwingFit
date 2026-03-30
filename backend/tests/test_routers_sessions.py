@@ -1,11 +1,13 @@
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -38,16 +40,21 @@ def setup_module():
     db.refresh(user)
     global USER_ID
     USER_ID = user.id
+    _user_id = user.id
+    def _override_current_user(db: Session = Depends(get_db)):
+        return db.query(User).filter(User.id == _user_id).first()
+    app.dependency_overrides[get_current_user] = _override_current_user
     db.close()
 
 
 def teardown_module():
     Base.metadata.drop_all(engine)
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_create_session():
-    response = client.post(f"/users/{USER_ID}/sessions", json={
+    response = client.post("/users/me/sessions", json={
         "launch_monitor_type": "trackman_4",
         "data_source": "file_upload",
         "session_date": "2025-06-15T10:00:00Z",
@@ -60,7 +67,7 @@ def test_create_session():
 
 
 def test_add_shots_to_session():
-    session_resp = client.post(f"/users/{USER_ID}/sessions", json={
+    session_resp = client.post("/users/me/sessions", json={
         "launch_monitor_type": "garmin_r10",
         "data_source": "file_upload",
     })
@@ -96,7 +103,7 @@ def test_add_shots_to_session():
 
 
 def test_get_session_summary():
-    session_resp = client.post(f"/users/{USER_ID}/sessions", json={
+    session_resp = client.post("/users/me/sessions", json={
         "launch_monitor_type": "trackman_4",
         "data_source": "file_upload",
     })

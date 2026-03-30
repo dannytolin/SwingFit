@@ -6,6 +6,7 @@ from backend.app.database import get_db
 from backend.app.models.club_spec import ClubSpec
 from backend.app.models.click import AffiliateClick
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 from backend.app.services.affiliate import get_buy_links
 
 router = APIRouter(tags=["affiliate"])
@@ -29,19 +30,15 @@ def get_club_buy_links(club_id: int, db: Session = Depends(get_db)):
 
 
 class ClickTrackRequest(BaseModel):
-    user_id: int
     club_spec_id: int
     retailer: str
     url: str
 
 
 @router.post("/affiliate/click", status_code=201)
-def track_click(req: ClickTrackRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == req.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+def track_click(req: ClickTrackRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     click = AffiliateClick(
-        user_id=req.user_id,
+        user_id=user.id,
         club_spec_id=req.club_spec_id,
         retailer=req.retailer,
         url=req.url,

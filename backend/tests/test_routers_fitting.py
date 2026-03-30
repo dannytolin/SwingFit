@@ -1,10 +1,12 @@
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 from backend.app.models.session import SwingSession
 from backend.app.models.shot import Shot
 from backend.app.models.club_spec import ClubSpec
@@ -37,6 +39,10 @@ def setup_module():
     db.commit()
     global USER_ID
     USER_ID = user.id
+    _user_id = user.id
+    def _override_current_user(db: Session = Depends(get_db)):
+        return db.query(User).filter(User.id == _user_id).first()
+    app.dependency_overrides[get_current_user] = _override_current_user
 
     session = SwingSession(
         user_id=user.id,
@@ -94,6 +100,7 @@ def setup_module():
 
 def teardown_module():
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
     Base.metadata.drop_all(engine)
 
 
@@ -101,7 +108,7 @@ client = TestClient(app)
 
 
 def test_get_swing_profile():
-    response = client.get(f"/users/{USER_ID}/swing-profile", params={"club_type": "driver"})
+    response = client.get("/users/me/swing-profile", params={"club_type": "driver"})
     assert response.status_code == 200
     data = response.json()
     assert data["club_type"] == "driver"
@@ -112,13 +119,12 @@ def test_get_swing_profile():
 
 
 def test_get_swing_profile_no_shots():
-    response = client.get(f"/users/{USER_ID}/swing-profile", params={"club_type": "putter"})
+    response = client.get("/users/me/swing-profile", params={"club_type": "putter"})
     assert response.status_code == 404
 
 
 def test_recommend_clubs():
     response = client.post("/fitting/recommend", json={
-        "user_id": USER_ID,
         "club_type": "driver",
     })
     assert response.status_code == 200
@@ -138,7 +144,6 @@ def test_recommend_clubs():
 
 def test_recommend_with_budget():
     response = client.post("/fitting/recommend", json={
-        "user_id": USER_ID,
         "club_type": "driver",
         "budget_max": 400.0,
         "include_used": True,
@@ -153,7 +158,6 @@ def test_recommend_with_budget():
 
 def test_recommend_no_profile():
     response = client.post("/fitting/recommend", json={
-        "user_id": USER_ID,
         "club_type": "putter",
     })
     assert response.status_code == 404
@@ -161,7 +165,6 @@ def test_recommend_no_profile():
 
 def test_recommend_clubs_include_buy_links():
     response = client.post("/fitting/recommend", json={
-        "user_id": USER_ID,
         "club_type": "driver",
     })
     assert response.status_code == 200

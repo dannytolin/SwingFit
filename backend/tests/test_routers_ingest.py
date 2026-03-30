@@ -1,13 +1,15 @@
 import hashlib
 import io
 
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -37,11 +39,16 @@ def setup_module():
     db.refresh(user)
     global USER_ID
     USER_ID = user.id
+    _user_id = user.id
+    def _override_current_user(db: Session = Depends(get_db)):
+        return db.query(User).filter(User.id == _user_id).first()
+    app.dependency_overrides[get_current_user] = _override_current_user
     db.close()
 
 
 def teardown_module():
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
     Base.metadata.drop_all(engine)
 
 
@@ -61,7 +68,7 @@ Driver,149.8,2845,248,271
 
 def test_upload_trackman_csv():
     response = client.post(
-        f"/ingest/upload?user_id={USER_ID}",
+        "/ingest/upload",
         files={"file": ("session.csv", io.BytesIO(TRACKMAN_CSV), "text/csv")},
     )
     assert response.status_code == 201
@@ -74,7 +81,7 @@ def test_upload_trackman_csv():
 
 def test_upload_garmin_csv():
     response = client.post(
-        f"/ingest/upload?user_id={USER_ID}",
+        "/ingest/upload",
         files={"file": ("garmin_export.csv", io.BytesIO(GARMIN_CSV), "text/csv")},
     )
     assert response.status_code == 201
@@ -86,7 +93,7 @@ def test_upload_garmin_csv():
 
 def test_upload_generic_csv():
     response = client.post(
-        f"/ingest/upload?user_id={USER_ID}",
+        "/ingest/upload",
         files={"file": ("unknown_monitor.csv", io.BytesIO(GENERIC_CSV), "text/csv")},
     )
     assert response.status_code == 201
@@ -99,11 +106,11 @@ def test_upload_generic_csv():
 def test_upload_duplicate_rejected():
     csv_data = TRACKMAN_CSV
     client.post(
-        f"/ingest/upload?user_id={USER_ID}",
+        "/ingest/upload",
         files={"file": ("session.csv", io.BytesIO(csv_data), "text/csv")},
     )
     response = client.post(
-        f"/ingest/upload?user_id={USER_ID}",
+        "/ingest/upload",
         files={"file": ("session.csv", io.BytesIO(csv_data), "text/csv")},
     )
     assert response.status_code == 409
@@ -112,7 +119,7 @@ def test_upload_duplicate_rejected():
 
 def test_manual_entry():
     response = client.post(
-        f"/ingest/manual?user_id={USER_ID}&club_type=Driver&ball_speed=150.0&launch_angle=12.5&spin_rate=2700&carry_distance=250",
+        "/ingest/manual?club_type=Driver&ball_speed=150.0&launch_angle=12.5&spin_rate=2700&carry_distance=250",
     )
     assert response.status_code == 201
     data = response.json()
@@ -124,15 +131,10 @@ def test_manual_entry():
 
 def test_manual_entry_with_optional_fields():
     response = client.post(
-        f"/ingest/manual?user_id={USER_ID}&club_type=7 Iron&ball_speed=120.0&launch_angle=18.0&spin_rate=6400&carry_distance=165&club_speed=82.0&total_distance=172",
+        "/ingest/manual?club_type=7 Iron&ball_speed=120.0&launch_angle=18.0&spin_rate=6400&carry_distance=165&club_speed=82.0&total_distance=172",
     )
     assert response.status_code == 201
     data = response.json()
     assert data["shot_count"] == 1
 
 
-def test_manual_entry_user_not_found():
-    response = client.post(
-        "/ingest/manual?user_id=9999&club_type=Driver&ball_speed=150&launch_angle=12&spin_rate=2700&carry_distance=250",
-    )
-    assert response.status_code == 404

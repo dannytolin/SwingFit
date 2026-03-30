@@ -5,18 +5,16 @@ from backend.app.database import get_db
 from backend.app.models.session import SwingSession
 from backend.app.models.shot import Shot
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 from backend.app.schemas.session import SwingSessionCreate, SwingSessionRead
 from backend.app.schemas.shot import ShotCreate, ShotRead
 
 router = APIRouter(tags=["sessions"])
 
 
-@router.post("/users/{user_id}/sessions", response_model=SwingSessionRead, status_code=201)
-def create_session(user_id: int, session_data: SwingSessionCreate, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    swing_session = SwingSession(user_id=user_id, **session_data.model_dump())
+@router.post("/users/me/sessions", response_model=SwingSessionRead, status_code=201)
+def create_session(session_data: SwingSessionCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    swing_session = SwingSession(user_id=user.id, **session_data.model_dump())
     db.add(swing_session)
     db.commit()
     db.refresh(swing_session)

@@ -1,10 +1,12 @@
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 from backend.app.models.session import SwingSession
 from backend.app.models.shot import Shot
 from backend.app.models.club_spec import ClubSpec
@@ -39,6 +41,10 @@ def setup_module():
     db.commit()
     global USER_ID
     USER_ID = user.id
+    _user_id = user.id
+    def _override_current_user(db: Session = Depends(get_db)):
+        return db.query(User).filter(User.id == _user_id).first()
+    app.dependency_overrides[get_current_user] = _override_current_user
 
     session = SwingSession(
         user_id=user.id,
@@ -92,6 +98,7 @@ def setup_module():
 
 def teardown_module():
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
     Base.metadata.drop_all(engine)
 
 
@@ -100,7 +107,6 @@ client = TestClient(app)
 
 def test_compare_clubs():
     response = client.post("/fitting/compare", json={
-        "user_id": USER_ID,
         "club_type": "driver",
         "current_club_id": CURRENT_CLUB_ID,
         "recommended_club_id": RECOMMENDED_CLUB_ID,
@@ -120,7 +126,6 @@ def test_compare_clubs():
 
 def test_compare_club_not_found():
     response = client.post("/fitting/compare", json={
-        "user_id": USER_ID,
         "club_type": "driver",
         "current_club_id": 9999,
         "recommended_club_id": RECOMMENDED_CLUB_ID,

@@ -2,13 +2,15 @@ import io
 import json
 from unittest.mock import MagicMock, patch
 
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -68,11 +70,16 @@ def setup_module():
     db.refresh(user)
     global USER_ID
     USER_ID = user.id
+    _user_id = user.id
+    def _override_current_user(db: Session = Depends(get_db)):
+        return db.query(User).filter(User.id == _user_id).first()
+    app.dependency_overrides[get_current_user] = _override_current_user
     db.close()
 
 
 def teardown_module():
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
     Base.metadata.drop_all(engine)
 
 
@@ -88,7 +95,7 @@ def test_upload_trackman_report_image(MockParser):
     fake_image = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
 
     response = client.post(
-        f"/ingest/trackman-report?user_id={USER_ID}",
+        "/ingest/trackman-report",
         files={"file": ("screenshot.png", io.BytesIO(fake_image), "image/png")},
     )
     assert response.status_code == 201
@@ -110,7 +117,7 @@ def test_upload_trackman_report_low_confidence(MockParser):
     fake_image = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
 
     response = client.post(
-        f"/ingest/trackman-report?user_id={USER_ID}",
+        "/ingest/trackman-report",
         files={"file": ("blurry.png", io.BytesIO(fake_image), "image/png")},
     )
     assert response.status_code == 201

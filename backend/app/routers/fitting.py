@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from backend.app.database import get_db
 from backend.app.models.club_spec import ClubSpec
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 from backend.app.services.swing_profile import compute_swing_profile
 from backend.app.services.fitting_engine import score_club, rank_recommendations
 from backend.app.services.explanation import generate_explanation
@@ -15,19 +16,15 @@ from backend.app.services.affiliate import get_buy_links
 router = APIRouter(tags=["fitting"])
 
 
-@router.get("/users/{user_id}/swing-profile")
-def get_swing_profile(user_id: int, club_type: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    profile = compute_swing_profile(db, user_id, club_type)
+@router.get("/users/me/swing-profile")
+def get_swing_profile(club_type: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = compute_swing_profile(db, user.id, club_type)
     if profile is None:
         raise HTTPException(status_code=404, detail=f"No valid shots found for {club_type}")
     return asdict(profile)
 
 
 class RecommendRequest(BaseModel):
-    user_id: int
     club_type: str
     budget_max: float | None = None
     include_used: bool = False
@@ -35,12 +32,8 @@ class RecommendRequest(BaseModel):
 
 
 @router.post("/fitting/recommend")
-def recommend_clubs(req: RecommendRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == req.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    profile = compute_swing_profile(db, req.user_id, req.club_type)
+def recommend_clubs(req: RecommendRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = compute_swing_profile(db, user.id, req.club_type)
     if profile is None:
         raise HTTPException(status_code=404, detail=f"No valid shots found for {req.club_type}")
 
@@ -84,39 +77,14 @@ def recommend_clubs(req: RecommendRequest, db: Session = Depends(get_db)):
 
 
 class CompareRequest(BaseModel):
-    user_id: int
     club_type: str
     current_club_id: int
     recommended_club_id: int
 
 
-def _club_to_dict(club: ClubSpec) -> dict:
-    return {
-        "id": club.id,
-        "brand": club.brand,
-        "model_name": club.model_name,
-        "model_year": club.model_year,
-        "club_type": club.club_type,
-        "loft": club.loft,
-        "launch_bias": club.launch_bias,
-        "spin_bias": club.spin_bias,
-        "forgiveness_rating": club.forgiveness_rating,
-        "workability_rating": club.workability_rating,
-        "swing_speed_min": club.swing_speed_min,
-        "swing_speed_max": club.swing_speed_max,
-        "msrp": club.msrp,
-        "avg_used_price": club.avg_used_price,
-        "still_in_production": club.still_in_production,
-    }
-
-
 @router.post("/fitting/compare")
-def compare_clubs(req: CompareRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == req.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    profile = compute_swing_profile(db, req.user_id, req.club_type)
+def compare_clubs(req: CompareRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = compute_swing_profile(db, user.id, req.club_type)
     if profile is None:
         raise HTTPException(status_code=404, detail=f"No valid shots found for {req.club_type}")
 
@@ -143,4 +111,24 @@ def compare_clubs(req: CompareRequest, db: Session = Depends(get_db)):
         "recommended_score": rec_score,
         "score_difference": round(rec_score - current_score, 1),
         "explanation": explanation,
+    }
+
+
+def _club_to_dict(club: ClubSpec) -> dict:
+    return {
+        "id": club.id,
+        "brand": club.brand,
+        "model_name": club.model_name,
+        "model_year": club.model_year,
+        "club_type": club.club_type,
+        "loft": club.loft,
+        "launch_bias": club.launch_bias,
+        "spin_bias": club.spin_bias,
+        "forgiveness_rating": club.forgiveness_rating,
+        "workability_rating": club.workability_rating,
+        "swing_speed_min": club.swing_speed_min,
+        "swing_speed_max": club.swing_speed_max,
+        "msrp": club.msrp,
+        "avg_used_price": club.avg_used_price,
+        "still_in_production": club.still_in_production,
     }

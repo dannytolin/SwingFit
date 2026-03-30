@@ -1,10 +1,12 @@
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.user import User
+from backend.app.routers.auth import get_current_user
 from backend.app.models.club_spec import ClubSpec
 
 engine = create_engine(
@@ -36,6 +38,10 @@ def setup_module():
     db.commit()
     global USER_ID
     USER_ID = user.id
+    _user_id = user.id
+    def _override_current_user(db: Session = Depends(get_db)):
+        return db.query(User).filter(User.id == _user_id).first()
+    app.dependency_overrides[get_current_user] = _override_current_user
 
     club = ClubSpec(
         brand="TaylorMade", model_name="Qi10 Max", model_year=2025, club_type="driver",
@@ -54,6 +60,7 @@ def setup_module():
 
 def teardown_module():
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
     Base.metadata.drop_all(engine)
 
 
@@ -80,7 +87,6 @@ def test_get_buy_links_club_not_found():
 
 def test_track_click():
     response = client.post("/affiliate/click", json={
-        "user_id": USER_ID,
         "club_spec_id": CLUB_ID,
         "retailer": "global_golf",
         "url": "https://www.globalgolf.com/search?q=test",
@@ -91,11 +97,3 @@ def test_track_click():
     assert data["retailer"] == "global_golf"
 
 
-def test_track_click_user_not_found():
-    response = client.post("/affiliate/click", json={
-        "user_id": 9999,
-        "club_spec_id": CLUB_ID,
-        "retailer": "amazon",
-        "url": "https://www.amazon.com/test",
-    })
-    assert response.status_code == 404
