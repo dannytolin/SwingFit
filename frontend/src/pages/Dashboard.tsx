@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
-import { getSwingProfile, getRecommendations } from '@/lib/api';
+import { getSwingProfile, getCachedRecommendations } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Upload, ArrowRight } from 'lucide-react';
@@ -22,7 +22,7 @@ export default function Dashboard() {
 
   const { data: recsData, isLoading: recsLoading } = useQuery({
     queryKey: ['topPicks', user?.id],
-    queryFn: () => getRecommendations({ club_type: 'driver', top_n: 3 }),
+    queryFn: () => getCachedRecommendations('driver'),
     enabled: !!user && !!profile,
     retry: false,
   });

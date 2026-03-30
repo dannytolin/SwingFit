@@ -1,39 +1,58 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useQuery } from '@tanstack/react-query';
-import { getRecommendations } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getCachedRecommendations, generateRecommendations } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Upload, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, ExternalLink, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 import TopBar from '@/components/TopBar';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 
 export default function ShopPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [budget, setBudget] = useState([1000]);
   const [clubType, setClubType] = useState('driver');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['recommendations', user?.id, clubType, budget[0]],
-    queryFn: () => getRecommendations({
+  // Try cached recommendations first (fast, no API call)
+  const { data: cachedData, isLoading } = useQuery({
+    queryKey: ['cachedRecs', user?.id, clubType],
+    queryFn: () => getCachedRecommendations(clubType),
+    enabled: !!user,
+    retry: false,
+  });
+
+  // Generate new recommendations (calls Claude API)
+  const generateMutation = useMutation({
+    mutationFn: () => generateRecommendations({
       club_type: clubType,
       budget_max: budget[0],
       include_used: true,
       top_n: 5,
     }),
-    enabled: !!user,
-    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cachedRecs', user?.id, clubType] });
+      toast.success('Recommendations generated!');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
   });
 
-  const recommendations = data?.recommendations || [];
-  const hasData = data !== null && !error;
-  const noProfile = error || data === null;
+  const recommendations = cachedData?.recommendations || [];
+  const hasCache = cachedData !== null && cachedData !== undefined;
+  const filtered = recommendations.filter((rec: any) => {
+    if (!rec.club) return false;
+    const price = rec.club.avg_used_price || rec.club.msrp;
+    return !price || price <= budget[0];
+  });
 
   return (
     <div className="min-h-screen pb-20">
@@ -59,14 +78,29 @@ export default function ShopPage() {
               <Skeleton key={i} className="h-48 w-full rounded-lg" />
             ))}
           </div>
-        ) : noProfile ? (
+        ) : generateMutation.isPending ? (
+          <div className="bg-card border border-border rounded-lg p-12 flex flex-col items-center text-center space-y-5 shadow-sm">
+            <div className="animate-pulse">
+              <Sparkles className="w-10 h-10 text-primary" />
+            </div>
+            <h2 className="font-heading text-xl">Finding your perfect clubs...</h2>
+            <p className="text-muted-foreground text-sm max-w-xs">
+              Our fitting engine is analyzing your swing data against our club database.
+            </p>
+          </div>
+        ) : !hasCache ? (
           <div className="bg-card border border-border rounded-lg p-12 flex flex-col items-center text-center space-y-5 shadow-sm">
             <Upload className="w-10 h-10 text-muted-foreground" />
-            <h2 className="font-heading text-xl">No swing data yet</h2>
+            <h2 className="font-heading text-xl">Ready to find your fit</h2>
             <p className="text-muted-foreground text-sm max-w-xs">
-              Your recommendations will appear here once you upload your first session.
+              Upload swing data first, then generate personalized recommendations.
             </p>
-            <Button onClick={() => navigate('/upload')}>Upload Session</Button>
+            <div className="flex gap-3">
+              <Button onClick={() => navigate('/upload')}>Upload Session</Button>
+              <Button variant="outline" onClick={() => generateMutation.mutate()}>
+                <Sparkles className="w-4 h-4 mr-2" />Generate Recommendations
+              </Button>
+            </div>
           </div>
         ) : (
           <>
@@ -91,12 +125,25 @@ export default function ShopPage() {
               </div>
             </div>
 
+            {/* Regenerate button */}
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => generateMutation.mutate()}
+                disabled={generateMutation.isPending}
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                Refresh Recommendations
+              </Button>
+            </div>
+
             {/* Product cards */}
             <div className="space-y-5">
-              {recommendations.length === 0 && (
+              {filtered.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-8">No clubs match your criteria. Try increasing your budget.</p>
               )}
-              {recommendations.map((rec: any) => {
+              {filtered.map((rec: any) => {
                 const club = rec.club;
                 const buyLinks = rec.buy_links || [];
                 const newLink = buyLinks.find((l: any) => l.condition === 'new');
@@ -119,7 +166,7 @@ export default function ShopPage() {
                         <div>
                           <h3 className="font-heading text-lg">{displayName}</h3>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {club.loft ? `${club.loft}°` : ''} · {club.model_year || ''} · {club.spin_bias || ''}
+                            {club.loft ? `${club.loft}\u00B0` : ''} · {club.model_year || ''} · {club.spin_bias || ''}
                           </p>
                         </div>
                         <span className="text-xs font-semibold bg-accent/20 text-accent-foreground px-3 py-1 rounded-full whitespace-nowrap">
@@ -128,6 +175,10 @@ export default function ShopPage() {
                       </div>
 
                       <p className="text-sm text-muted-foreground leading-relaxed">{rec.explanation}</p>
+
+                      {rec.best_for && (
+                        <p className="text-xs font-medium text-primary">Best for: {rec.best_for}</p>
+                      )}
 
                       {/* Pricing rows */}
                       <div className="border-t border-border pt-3 space-y-2">
