@@ -30,6 +30,15 @@ AFFILIATE_CONFIGS: dict[str, dict] = {
         "brands": ["TaylorMade"],
         "url_template": "{base_url}/search?q={query}&ref={affiliate_id}",
     },
+    "second_swing": {
+        "base_url": "https://www.2ndswing.com",
+        "affiliate_network": "shareasale",
+        "affiliate_id": "SWINGFIT_SAS_ID",
+        "commission_rate": 0.07,
+        "cookie_days": 30,
+        "supports_used": True,
+        "url_template": "{base_url}/search?q={query}&ref={affiliate_id}",
+    },
     "amazon": {
         "base_url": "https://www.amazon.com",
         "affiliate_network": "associates",

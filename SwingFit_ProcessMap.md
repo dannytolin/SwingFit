@@ -885,19 +885,43 @@ Instead of manually entering club specs and prices, Playwright scrapers run on a
 ```
 scripts/scrapers/
 ├── base.py                  # Shared Playwright setup, logging, rate limiting
-├── titleist_specs.py        # Titleist driver specs from titleist.com
-├── taylormade_specs.py      # TaylorMade driver specs from taylormadegolf.com
-├── callaway_specs.py        # Callaway driver specs from callawaygolf.com
+│
+│ Phase 1 — Top 5 OEM brands (drivers only):
+├── titleist_specs.py        # Titleist drivers from titleist.com
+├── taylormade_specs.py      # TaylorMade drivers from taylormadegolf.com
+├── callaway_specs.py        # Callaway drivers from callawaygolf.com
+├── ping_specs.py            # Ping drivers from ping.com
+├── cobra_specs.py           # Cobra drivers from cobragolf.com
+│
+│ Phase 2 — Additional brands (all club categories):
+├── mizuno_specs.py          # Mizuno irons/wedges from mizunogolf.com
+├── cleveland_specs.py       # Cleveland wedges/putters from clevelandgolf.com
+├── srixon_specs.py          # Srixon drivers/irons from srixon.com
+├── pxg_specs.py             # PXG full line from pxg.com (DTC)
+├── honma_specs.py           # Honma from honmagolf.com
+├── touredge_specs.py        # Tour Edge from touredge.com
+│
+│ Pricing scrapers:
 ├── globalgolf_prices.py     # New/used pricing from GlobalGolf.com
+├── second_swing_prices.py   # Used pricing from 2ndSwing.com
+│
+│ Review scrapers:
 ├── mygolfspy_reviews.py     # Review summaries from MyGolfSpy.com
+│
 └── run_all.py               # Orchestrator — runs all scrapers, upserts results
 ```
 
+**Phased rollout:**
+
+- **Phase 1 (built):** Top 5 brands — TaylorMade, Callaway, Titleist, Ping, Cobra — drivers only. GlobalGolf + 2nd Swing pricing. MyGolfSpy reviews.
+- **Phase 2 (next sprint):** Add Mizuno, Cleveland/Srixon, PXG, Honma, Tour Edge. Expand all brands to full club categories (irons, wedges, fairways, hybrids, putters).
+- **Phase 3:** Additional review sources (Golf Digest, GolfWRX).
+
 **What each scraper does:**
 
-1. **OEM Spec Scrapers** (Titleist, TaylorMade, Callaway) — Navigate to each brand's driver category page using headless Chromium. Extract: model name, year, loft options, MSRP, shaft options, adjustability. These are JS-rendered pages requiring a real browser.
+1. **OEM Spec Scrapers** (5 brands Phase 1, 11 total Phase 2) — Navigate to each brand's club category pages using headless Chromium. Extract: model name, year, club type, loft options, MSRP, shaft options, adjustability, key technology. These are JS-rendered pages requiring a real browser.
 
-2. **GlobalGolf Price Scraper** — For each club in the `club_specs` table, search GlobalGolf and extract the lowest new price, lowest used price, and product URL. Upserts into the `price_cache` table. Product URLs become affiliate link bases.
+2. **Price Scrapers** (GlobalGolf + 2nd Swing) — For each club in the `club_specs` table, search retailer sites and extract the lowest new price, lowest used price, and product URL. Upsert into the `price_cache` table. Product URLs become affiliate link bases.
 
 3. **MyGolfSpy Review Scraper** — Scrape review pages for each club. Extract the first 500–1000 words of review text and any performance data tables. Store as `review_summary` on the `club_specs` record. This gives the Claude API recommendation engine editorial context.
 
@@ -906,8 +930,8 @@ scripts/scrapers/
 - 2–3 second delays between page loads to avoid rate limiting
 - User-Agent rotation for retailer scrapers
 - Scraper runs logged to a `scrape_logs` table (scraper_name, ran_at, status, clubs_found, errors)
-- Drivers only to start — irons, wedges, and fairway woods added later
-- `price_cache` table extended with `is_available` (boolean) and `product_url` fields
+- Each OEM scraper extracts at minimum: brand, model_name, model_year, club_type, loft, msrp, shaft_options, adjustable, key technology
+- `price_cache` table includes: club_spec_id, retailer, price, condition, product_url, last_checked, is_available
 - Add `review_summary` text column to `club_specs`
 
 **Data flow:**

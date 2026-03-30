@@ -16,7 +16,10 @@ from scripts.scrapers.base import logger, utc_now
 from scripts.scrapers.titleist_specs import scrape_titleist_drivers
 from scripts.scrapers.taylormade_specs import scrape_taylormade_drivers
 from scripts.scrapers.callaway_specs import scrape_callaway_drivers
+from scripts.scrapers.ping_specs import scrape_ping_drivers
+from scripts.scrapers.cobra_specs import scrape_cobra_drivers
 from scripts.scrapers.globalgolf_prices import scrape_globalgolf_prices
+from scripts.scrapers.second_swing_prices import scrape_second_swing_prices
 from scripts.scrapers.mygolfspy_reviews import scrape_mygolfspy_reviews
 
 
@@ -64,6 +67,8 @@ async def run_all():
             ("titleist_specs", scrape_titleist_drivers),
             ("taylormade_specs", scrape_taylormade_drivers),
             ("callaway_specs", scrape_callaway_drivers),
+            ("ping_specs", scrape_ping_drivers),
+            ("cobra_specs", scrape_cobra_drivers),
         ]:
             try:
                 logger.info(f"Running {scraper_name}...")
@@ -90,6 +95,21 @@ async def run_all():
             logger.error(f"globalgolf_prices failed: {e}")
             db.rollback()
             log_scrape(db, "globalgolf_prices", "error", errors=str(e))
+
+        # --- 2nd Swing Prices ---
+        try:
+            logger.info("Running second_swing_prices...")
+            all_clubs = db.query(ClubSpec).filter(ClubSpec.club_type == "driver").all()
+            club_dicts = [{"id": c.id, "brand": c.brand, "model_name": c.model_name, "club_type": c.club_type} for c in all_clubs]
+            prices = await scrape_second_swing_prices(club_dicts)
+            for price_data in prices:
+                upsert_price(db, price_data)
+            db.commit()
+            log_scrape(db, "second_swing_prices", "success", clubs_found=len(prices))
+        except Exception as e:
+            logger.error(f"second_swing_prices failed: {e}")
+            db.rollback()
+            log_scrape(db, "second_swing_prices", "error", errors=str(e))
 
         try:
             logger.info("Running mygolfspy_reviews...")
