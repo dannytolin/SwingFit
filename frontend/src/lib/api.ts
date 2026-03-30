@@ -118,3 +118,20 @@ export async function generateRecommendations(opts: {
   }
   return res.json();
 }
+
+export async function compareClubs(opts: {
+  club_type: string;
+  current_club_id: number;
+  recommended_club_id: number;
+}) {
+  const res = await authFetch(`${API_URL}/fitting/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to compare clubs');
+  }
+  return res.json();
+}

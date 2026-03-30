@@ -29,12 +29,24 @@ Optimal windows by club type:
 - 7-iron: launch 16-20 deg, spin 6000-7000 rpm
 - PW: launch 24-28 deg, spin 8000-9500 rpm
 
+CRITICAL: Like a real club fitter, don't just recommend a clubhead — recommend the FULL BUILD.
+Club Champion fits shaft first, then head, then fine-tunes specs. Your recommendations should
+reflect this approach. Shaft weight and flex affect tempo and consistency. Attack angle matters
+for optimal spin. Consider the player's dispersion when choosing forgiveness vs workability.
+
 Return a JSON array of objects with these exact fields:
 - club_spec_id (int): the id of the club from the candidate list
-- match_score (int, 0-100): how well this club fits the golfer
+- match_score (int, 0-100): how well this complete build fits the golfer
 - explanation (string): 2-3 sentence editorial explanation referencing the golfer's numbers
 - projected_changes (object): keys like "spin_delta", "carry_delta", "launch_delta" with string range values
 - best_for (string): one-line tag like "Low spin seekers with above-average speed"
+- recommended_build (object): full build spec with these keys:
+  - head (string): model name + recommended loft setting (e.g., "Titleist TSR3, 9.0 deg set to 8.5 deg via SureFit")
+  - shaft (string): specific shaft model + flex + weight (e.g., "Project X HZRDUS Smoke Black 60g, Stiff")
+  - grip (string): grip recommendation (e.g., "Golf Pride Tour Velvet, Standard")
+  - length (string): recommended length (e.g., "45.5 inches")
+  - adjustments (string): loft/lie tweaks if applicable (e.g., "SureFit set to A1 (-0.75 deg loft)")
+  - swingweight (string): target swingweight (e.g., "D3")
 """
 
 
@@ -100,7 +112,7 @@ def call_claude_for_recommendations(
 
     response = client.messages.create(
         model=MODEL,
-        max_tokens=2000,
+        max_tokens=4000,
         system=FITTING_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )

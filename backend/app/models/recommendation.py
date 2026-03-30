@@ -17,6 +17,7 @@ class Recommendation(Base):
     explanation: Mapped[str] = mapped_column(Text, nullable=False)
     projected_changes: Mapped[str | None] = mapped_column(Text, nullable=True)
     best_for: Mapped[str | None] = mapped_column(String, nullable=True)
+    recommended_build: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
     budget_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)

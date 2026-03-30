@@ -105,6 +105,7 @@ def _cache_recommendations(db: Session, user_id: int, club_type: str, budget_max
             explanation=rec["explanation"],
             projected_changes=json.dumps(rec.get("projected_changes", {})),
             best_for=rec.get("best_for"),
+            recommended_build=json.dumps(rec.get("recommended_build", {})),
             budget_max=budget_max,
         ))
     db.commit()
@@ -130,6 +131,7 @@ def _read_cached_recommendations(db: Session, user_id: int, club_type: str) -> l
             "explanation": rec.explanation,
             "projected_changes": json.loads(rec.projected_changes) if rec.projected_changes else {},
             "best_for": rec.best_for,
+            "recommended_build": json.loads(rec.recommended_build) if rec.recommended_build else {},
             "buy_links": get_buy_links(club_dict) if club else [],
         })
     return results
@@ -161,6 +163,7 @@ def recommend_clubs(req: RecommendRequest, user: User = Depends(get_current_user
                 "explanation": rec["explanation"],
                 "projected_changes": rec.get("projected_changes", {}),
                 "best_for": rec.get("best_for"),
+                "recommended_build": rec.get("recommended_build", {}),
                 "buy_links": get_buy_links(club, include_used=req.include_used) if club else [],
             })
 

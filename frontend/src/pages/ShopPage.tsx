@@ -180,6 +180,31 @@ export default function ShopPage() {
                         <p className="text-xs font-medium text-primary">Best for: {rec.best_for}</p>
                       )}
 
+                      {/* Recommended Build */}
+                      {rec.recommended_build && Object.keys(rec.recommended_build).length > 0 && (
+                        <div className="border-t border-border pt-3 space-y-1.5">
+                          <p className="text-xs font-semibold text-foreground uppercase tracking-wide">Recommended Build</p>
+                          {rec.recommended_build.head && (
+                            <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Head:</span> {rec.recommended_build.head}</p>
+                          )}
+                          {rec.recommended_build.shaft && (
+                            <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Shaft:</span> {rec.recommended_build.shaft}</p>
+                          )}
+                          {rec.recommended_build.grip && (
+                            <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Grip:</span> {rec.recommended_build.grip}</p>
+                          )}
+                          {rec.recommended_build.length && (
+                            <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Length:</span> {rec.recommended_build.length}</p>
+                          )}
+                          {rec.recommended_build.adjustments && (
+                            <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Adjustments:</span> {rec.recommended_build.adjustments}</p>
+                          )}
+                          {rec.recommended_build.swingweight && (
+                            <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Swingweight:</span> {rec.recommended_build.swingweight}</p>
+                          )}
+                        </div>
+                      )}
+
                       {/* Pricing rows */}
                       <div className="border-t border-border pt-3 space-y-2">
                         {club.msrp && (
